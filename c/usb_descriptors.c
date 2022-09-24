@@ -125,8 +125,8 @@ enum {
 };
 
 char *const usbd_desc_str[] = {
-    [USBD_STR_MANUFACTURER]     = "Raspberry Pi",
-    [USBD_STR_PRODUCT]          = "GenUsb-HC",
+    [USBD_STR_MANUFACTURER]     = "Creative Sphere",
+    [USBD_STR_PRODUCT]          = "Editing Wheel",
     [USBD_STR_SERIAL_NUMBER]    = NULL,
     [USBD_STR_CDC_NAME]         = "CDC",
     [USBD_STR_HID_NAME]         = "HID_KMGC",
@@ -202,18 +202,6 @@ static const tusb_desc_device_t usbd_desc_device = {
     HID_REPORT_SIZE  ( 1                                      ) ,\
     HID_INPUT        ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ) ,\
   HID_COLLECTION_END \
-
-    // /* 8 bit DPad/Hat Button Map  */ \
-    // HID_USAGE_PAGE   ( HID_USAGE_PAGE_DESKTOP                 ) ,\
-    // HID_USAGE        ( HID_USAGE_DESKTOP_HAT_SWITCH           ) ,\
-    // HID_LOGICAL_MIN  ( 1                                      ) ,\
-    // HID_LOGICAL_MAX  ( 8                                      ) ,\
-    // HID_PHYSICAL_MIN ( 0                                      ) ,\
-    // HID_PHYSICAL_MAX_N ( 315, 2                               ) ,\
-    // HID_REPORT_COUNT ( 1                                      ) ,\
-    // HID_REPORT_SIZE  ( 8                                      ) ,\
-    // HID_INPUT        ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ) ,\
-
 
 #define EPNUM_HID               (0x83)
 
