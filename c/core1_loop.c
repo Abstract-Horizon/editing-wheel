@@ -1,10 +1,12 @@
 
 #include "hardware/i2c.h"
 #include "pico/stdlib.h"
+#include "bsp/board.h"
 #include "pico/multicore.h"
 
 const uint8_t ADDRESS = 0x36;
 
+static uint32_t start_ms = 0;
 volatile int32_t* angle;
 volatile uint32_t* reading_count;
 
@@ -14,7 +16,7 @@ uint8_t buf[5];
 uint8_t reg = 0x0B;
 
 
-void read_angle() {
+void read_angle(volatile int32_t* angle) {
     ret = i2c_write_blocking(i2c_default, ADDRESS, &reg, 1, true);
     if (ret < 0) {
       *angle = ret - 2000;
@@ -35,16 +37,17 @@ void read_angle() {
 }
 
 void core1_entry() {
+  start_ms = board_millis();
   while (true) {
-    read_angle();
-    *reading_count += 1;
+    read_angle(angle);
+    *reading_count = board_millis() - start_ms;
     // sleep_ms(250);
 
-    uint32_t k = 0;
-    uint32_t j;
-    for (j = 0; j < 1000000; j++) {
-      k += 1;
-    }
+    // uint32_t k = 0;
+    // uint32_t j;
+    // for (j = 0; j < 1000000; j++) {
+    //   k += 1;
+    // }
   }
   *angle = -9000;
 }

@@ -24,6 +24,7 @@ static uint32_t last_button = 0;
 static volatile int32_t angle;
 static volatile uint32_t reading_count = 1;
 
+void read_angle(volatile int32_t* angle);
 extern void start_second_core(volatile int32_t* angle_ptr, volatile uint32_t* reading_count);
 
 void led_blinking_task(uint32_t btn);
@@ -42,14 +43,10 @@ int main() {
     stdio_init_all();
     local_i2c_init();
 
-    angle = 12;
-
     sleep_ms(10);
     start_second_core(&angle, &reading_count);
+    sleep_ms(500);
 
-    angle = 13;
-
-    sleep_ms(10);
     while (true) {
         uint32_t const btn = board_button_read();
         if (last_button != btn) {
@@ -64,11 +61,9 @@ int main() {
         }
 
         tud_task(); // tinyusb device task
-        // cdc_task();
-        // printf("~/mypico/cdc_plus_hid.c\n");
-        // sleep_ms(1000);
         led_blinking_task(btn);
         hid_task(btn);
+        // read_angle(&angle);
     }
 }
 
