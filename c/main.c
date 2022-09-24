@@ -4,7 +4,7 @@
 #include "hardware/i2c.h"
 #include "bsp/board.h"
 #include "pico/multicore.h"
-
+#include "joystick_hid.h"
 
 #define FLAG_VALUE 123
 
@@ -20,15 +20,18 @@ enum  {
 };
 
 static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
+static uint32_t next_report = 0;
 static uint32_t last_button = 0;
-static volatile int32_t angle;
+static volatile int16_t angle = 0;
 static volatile uint32_t reading_count = 1;
+static uint32_t btn = false;
+
 
 void read_angle(volatile int32_t* angle);
-extern void start_second_core(volatile int32_t* angle_ptr, volatile uint32_t* reading_count);
+extern void start_second_core(volatile int16_t* angle_ptr, volatile uint32_t* reading_count);
 
-void led_blinking_task(uint32_t btn);
-void hid_task(uint32_t btn);
+void led_blinking_task();
+void hid_task();
 void local_i2c_init();
 void i2c_scan();
 
@@ -48,21 +51,30 @@ int main() {
     sleep_ms(500);
 
     while (true) {
-        uint32_t const btn = board_button_read();
-        if (last_button != btn) {
-          if (btn) {
-            printf("Button pressed!\n");
-            // i2c_scan();
-            printf("Angle is %i (readings %i)\n", angle, reading_count);
-          } else {
-            printf("Button is released!\n");
-          }
-          last_button = btn;
-        }
+        // uint32_t const btn = board_button_read();
+        // if (last_button != btn) {
+        //   if (btn) {
+        //     printf("Button pressed!\n");
+        //     // i2c_scan();
+        //     printf("Angle is %i (readings %i)\n", angle, reading_count);
+        //   } else {
+        //     printf("Button is released!\n");
+        //   }
+        //   last_button = btn;
+        // }
+
 
         tud_task(); // tinyusb device task
-        led_blinking_task(btn);
-        hid_task(btn);
+        led_blinking_task();
+
+        uint32_t const now = board_millis();
+        if (now >= next_report) {
+          next_report = now + 2000;
+          printf("Angle is %i (readings %i)\n", angle, reading_count);
+        }
+
+        hid_task();
+
         // read_angle(&angle);
     }
 }
@@ -106,7 +118,7 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
 // USB HID
 //--------------------------------------------------------------------+
 
-static void send_hid_report(uint8_t report_id, uint32_t btn) {
+static void send_hid_report(uint8_t report_id) {
   // skip if hid is not ready yet
   if (!tud_hid_ready()) { return; }
 
@@ -116,17 +128,17 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
       // use to avoid send multiple consecutive zero report for keyboard
       static bool has_keyboard_key = false;
 
-      if (btn) {
-        uint8_t keycode[6] = { 0 };
-        keycode[0] = HID_KEY_A;
+      // if (btn) {
+      //   uint8_t keycode[6] = { 0 };
+      //   keycode[0] = HID_KEY_A;
 
-        tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
-        has_keyboard_key = true;
-      } else {
-        // send empty key report if previously has key pressed
-        if (has_keyboard_key) tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, NULL);
-        has_keyboard_key = false;
-      }
+      //   tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
+      //   has_keyboard_key = true;
+      // } else {
+      //   // send empty key report if previously has key pressed
+      //   if (has_keyboard_key) tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, NULL);
+      //   has_keyboard_key = false;
+      // }
     }
     break;
 
@@ -144,17 +156,17 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
       // use to avoid send multiple consecutive zero report
       static bool has_consumer_key = false;
 
-      if (btn) {
-        // volume down
-        uint16_t volume_down = HID_USAGE_CONSUMER_VOLUME_DECREMENT;
-        tud_hid_report(REPORT_ID_CONSUMER, &volume_down, 2);
-        has_consumer_key = true;
-      } else {
-        // send empty key report (release key) if previously has key pressed
-        uint16_t empty_key = 0;
-        if (has_consumer_key) { tud_hid_report(REPORT_ID_CONSUMER, &empty_key, 2); }
-        has_consumer_key = false;
-      }
+      // if (btn) {
+      //   // volume down
+      //   uint16_t volume_down = HID_USAGE_CONSUMER_VOLUME_DECREMENT;
+      //   tud_hid_report(REPORT_ID_CONSUMER, &volume_down, 2);
+      //   has_consumer_key = true;
+      // } else {
+      //   // send empty key report (release key) if previously has key pressed
+      //   uint16_t empty_key = 0;
+      //   if (has_consumer_key) { tud_hid_report(REPORT_ID_CONSUMER, &empty_key, 2); }
+      //   has_consumer_key = false;
+      // }
     }
     break;
 
@@ -169,23 +181,23 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
           .hat = 0, .buttons = 0
         };
 
-      if (btn) {
-        // printf("Gamepad: has button pressed...");
-        report.hat = GAMEPAD_HAT_UP;
-        report.buttons = GAMEPAD_BUTTON_A;
-        tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
+      // if (btn) {
+      //   // printf("Gamepad: has button pressed...");
+      //   report.hat = GAMEPAD_HAT_UP;
+      //   report.buttons = GAMEPAD_BUTTON_A;
+      //   tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
 
-        has_gamepad_key = true;
-      } else {
-        report.hat = GAMEPAD_HAT_CENTERED;
-        report.buttons = 0;
-        if (has_gamepad_key) {
-          printf("Gamepad: Sending REPORT_ID_GAMEPAD\n");
-          tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
-        }
+      //   has_gamepad_key = true;
+      // } else {
+      //   report.hat = GAMEPAD_HAT_CENTERED;
+      //   report.buttons = 0;
+      //   if (has_gamepad_key) {
+      //     printf("Gamepad: Sending REPORT_ID_GAMEPAD\n");
+      //     tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
+      //   }
 
-        has_gamepad_key = false;
-      }
+      //   has_gamepad_key = false;
+      // }
     }
     break;
 
@@ -194,29 +206,19 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
       // use to avoid send multiple consecutive zero report for keyboard
       static bool has_gamepad_key = false;
 
-      hid_gamepad_report_t report =
+      hid_joystick_report_t report =
         {
-          .x   = 0, .y = 0, .z = 0, .rz = 0, .rx = 0, .ry = 0,
-          .hat = 0, .buttons = 0
+          .x   = 0, .y = 0, .z = 0,
+          .buttons = 0
         };
 
-      if (btn) {
-        // printf("Gamepad: has button pressed...");
-        report.hat = GAMEPAD_HAT_UP;
+        report.x = angle;
         report.buttons = GAMEPAD_BUTTON_A;
         tud_hid_report(REPORT_ID_JOYSTICK, &report, sizeof(report));
 
-        has_gamepad_key = true;
-      } else {
-        report.hat = GAMEPAD_HAT_CENTERED;
-        report.buttons = 0;
-        if (has_gamepad_key) {
-          printf("Gamepad: Sending REPORT_ID_JOYSTICK\n");
-          tud_hid_report(REPORT_ID_JOYSTICK, &report, sizeof(report));
-        }
+        // printf("Sending %i\n", report.x);
 
         has_gamepad_key = false;
-      }
     }
     break;
 
@@ -226,14 +228,17 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
 
 // Every 10ms, we will sent 1 report for each HID profile (keyboard, mouse etc ..)
 // tud_hid_report_complete_cb() is used to send the next report after previous one is complete
-void hid_task(uint32_t btn) {
+void hid_task() {
   // Poll every 10ms
   const uint32_t interval_ms = 10;
   static uint32_t start_ms = 0;
 
+  if (btn) {
+    printf("Button is pressed...\n");
+  }
+
   if (board_millis() - start_ms < interval_ms) { return; } // not enough time
   start_ms += interval_ms;
-
 
   // Remote wakeup
   if (tud_suspended() && btn) {
@@ -243,14 +248,14 @@ void hid_task(uint32_t btn) {
   } else {
     // Send the 1st of report chain, the rest will be sent by tud_hid_report_complete_cb()
     // send_hid_report(REPORT_ID_GAMEPAD, btn);
-    send_hid_report(REPORT_ID_JOYSTICK, btn);
+    send_hid_report(REPORT_ID_JOYSTICK);
   }
 }
 
 //--------------------------------------------------------------------+
 // BLINKING TASK
 //--------------------------------------------------------------------+
-void led_blinking_task(uint32_t btn) {
+void led_blinking_task() {
   static uint32_t start_ms = 0;
   static bool led_state = false;
 

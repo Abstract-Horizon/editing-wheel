@@ -7,7 +7,7 @@
 const uint8_t ADDRESS = 0x36;
 
 static uint32_t start_ms = 0;
-volatile int32_t* angle;
+volatile int16_t* angle;
 volatile uint32_t* reading_count;
 
 int ret;
@@ -16,7 +16,7 @@ uint8_t buf[5];
 uint8_t reg = 0x0B;
 
 
-void read_angle(volatile int32_t* angle) {
+void read_angle(volatile int16_t* angle) {
     ret = i2c_write_blocking(i2c_default, ADDRESS, &reg, 1, true);
     if (ret < 0) {
       *angle = ret - 2000;
@@ -52,7 +52,7 @@ void core1_entry() {
   *angle = -9000;
 }
 
-void start_second_core(volatile int32_t* angle_ptr, volatile uint32_t* reading_count_ptr) {
+void start_second_core(volatile int16_t* angle_ptr, volatile uint32_t* reading_count_ptr) {
   angle = angle_ptr;
   reading_count = reading_count_ptr;
   // *angle = 22;

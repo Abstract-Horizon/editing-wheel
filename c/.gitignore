@@ -1,6 +1,7 @@
 build
 **/*.dis
 **/*.bin
+**/*.elf
 **/*.elf.map
 **/*.hex
 **/*.uf2
