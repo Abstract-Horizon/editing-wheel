@@ -33,29 +33,28 @@ static volatile float debug_float3 = 3.4;
 static uint32_t btn = false;
 
 const uint32_t direction = 1;
-const float zero = 0.0;
+const float zero = 235.0;
 
-static profile_t profile1 = { .direction = direction, .zero = zero, .dividers = 1, .expo = 0.8, .gain_factor = 2, .dead_band = 0.4};
-static profile_t profile2 = { .direction = direction, .zero = zero, .dividers = 1, .expo = -0.8, .gain_factor = 2, .dead_band = 0.4};
-static profile_t profile3 = { .direction = direction, .zero = zero, .dividers = 2, .expo = 1, .gain_factor = 1, .dead_band = 1};
+static profile_t profiles[9] = {
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 1, .expo = 0.8, .gain_factor = 2, .dead_band = 0.4},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 1, .expo = -0.8, .gain_factor = 2, .dead_band = 0.4},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 2, .expo = 1, .gain_factor = 1, .dead_band = 1},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 32, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 32, .expo = -0.8, .gain_factor = 1, .dead_band = 1.8},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 24, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 24, .expo = -0.8, .gain_factor = 1, .dead_band = 1.8},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 12, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 12, .expo = -0.8, .gain_factor = 1, .dead_band = 1.8}
+};
 
 
-static profile_t profile4 = { .direction = direction, .zero = zero, .dividers = 32, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4};
-static profile_t profile5 = { .direction = direction, .zero = zero, .dividers = 32, .expo = -0.8, .gain_factor = 1, .dead_band = 1.8};
-static profile_t profile6 = { .direction = direction, .zero = zero, .dividers = 24, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4};
-static profile_t profile7 = { .direction = direction, .zero = zero, .dividers = 24, .expo = -0.8, .gain_factor = 1, .dead_band = 1.8};
-static profile_t profile8 = { .direction = direction, .zero = zero, .dividers = 12, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4};
-static profile_t profile9 = { .direction = direction, .zero = zero, .dividers = 12, .expo = -0.8, .gain_factor = 1, .dead_band = 1.8};
-
-static profile_t* profile = &profile6;
+static profile_t* profile = &profiles[1];
 
 
 extern void start_second_core(
     volatile int16_t* angle_ptr,
     profile_t* selected_profile,
-    volatile float* debug_float1,
-    volatile float* debug_float2,
-    volatile float* debug_float3
+    volatile float* debug_float1
 );
 
 void read_angle(volatile int32_t* angle);
@@ -75,31 +74,18 @@ void setup_profile(profile_t* profile_in) {
 }
 
 int main() {
-    setup_profile(&profile6);
+    setup_profile(&profiles[6]);
     board_init();
     tusb_init();
     stdio_init_all();
     local_i2c_init();
 
     sleep_ms(10);
-    start_second_core(&angle, profile, &debug_float1, &debug_float2, &debug_float3);
+    start_second_core(&angle, profile, &debug_float1);
     sleep_ms(500);
 
     while (true) {
-        // uint32_t const btn = board_button_read();
-        // if (last_button != btn) {
-        //   if (btn) {
-        //     printf("Button pressed!\n");
-        //     // i2c_scan();
-        //     printf("Angle is %i (readings %i)\n", angle, reading_count);
-        //   } else {
-        //     printf("Button is released!\n");
-        //   }
-        //   last_button = btn;
-        // }
-
-
-        tud_task(); // tinyusb device task
+        tud_task();
         led_blinking_task();
 
         uint32_t const now = board_millis();
@@ -110,8 +96,6 @@ int main() {
         }
 
         hid_task();
-
-        // read_angle(&angle);
     }
 }
 
@@ -125,28 +109,6 @@ uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id,
 void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
          hid_report_type_t report_type, uint8_t const* buffer,
          uint16_t bufsize) {
-
-    (void) instance;
-
-    if (report_type == HID_REPORT_TYPE_OUTPUT) {
-      // Set keyboard LED e.g Capslock, Numlock etc...
-      if (report_id == REPORT_ID_KEYBOARD) {
-        // bufsize should be (at least) 1
-        if (bufsize < 1) { return; }
-
-        uint8_t const kbd_leds = buffer[0];
-
-        if (kbd_leds & KEYBOARD_LED_CAPSLOCK) {
-          // Capslock On: disable blink, turn led on
-          blink_interval_ms = 0;
-          board_led_write(true);
-        } else {
-          // Caplocks Off: back to normal blink
-          board_led_write(false);
-          blink_interval_ms = BLINK_MOUNTED;
-        }
-      }
-    }
   }
 
 
@@ -154,138 +116,45 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
 // USB HID
 //--------------------------------------------------------------------+
 
-static void send_hid_report(uint8_t report_id) {
-  // skip if hid is not ready yet
-  if (!tud_hid_ready()) { return; }
+static void send_joystick_hid_report() {
 
-  switch(report_id) {
-    case REPORT_ID_KEYBOARD:
-    {
-      // use to avoid send multiple consecutive zero report for keyboard
-      static bool has_keyboard_key = false;
+    hid_joystick_report_t report = {
+        .x = 0, .y = 0, .z = 0,
+        .buttons = 0
+    };
 
-      // if (btn) {
-      //   uint8_t keycode[6] = { 0 };
-      //   keycode[0] = HID_KEY_A;
 
-      //   tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
-      //   has_keyboard_key = true;
-      // } else {
-      //   // send empty key report if previously has key pressed
-      //   if (has_keyboard_key) tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, NULL);
-      //   has_keyboard_key = false;
-      // }
+    switch (profile->axis) {
+        case 0: {
+            report.x = angle;
+        }
+        break;
+        case 1: {
+            report.y = angle;
+        }
+        break;
+        case 2: {
+            report.z = angle;
+        }
+        break;
+
+        default: break;
     }
-    break;
-
-    case REPORT_ID_MOUSE:
-    {
-      int8_t const delta = btn ? 5 : 0;
-
-      // no button, right + down, no scroll, no pan
-      tud_hid_mouse_report(REPORT_ID_MOUSE, 0x00, delta, delta, 0, 0);
-    }
-    break;
-
-    case REPORT_ID_CONSUMER:
-    {
-      // use to avoid send multiple consecutive zero report
-      static bool has_consumer_key = false;
-
-      // if (btn) {
-      //   // volume down
-      //   uint16_t volume_down = HID_USAGE_CONSUMER_VOLUME_DECREMENT;
-      //   tud_hid_report(REPORT_ID_CONSUMER, &volume_down, 2);
-      //   has_consumer_key = true;
-      // } else {
-      //   // send empty key report (release key) if previously has key pressed
-      //   uint16_t empty_key = 0;
-      //   if (has_consumer_key) { tud_hid_report(REPORT_ID_CONSUMER, &empty_key, 2); }
-      //   has_consumer_key = false;
-      // }
-    }
-    break;
-
-    case REPORT_ID_GAMEPAD:
-    {
-      // use to avoid send multiple consecutive zero report for keyboard
-      static bool has_gamepad_key = false;
-
-      hid_gamepad_report_t report =
-        {
-          .x   = 0, .y = 0, .z = 0, .rz = 0, .rx = 0, .ry = 0,
-          .hat = 0, .buttons = 0
-        };
-
-      // if (btn) {
-      //   // printf("Gamepad: has button pressed...");
-      //   report.hat = GAMEPAD_HAT_UP;
-      //   report.buttons = GAMEPAD_BUTTON_A;
-      //   tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
-
-      //   has_gamepad_key = true;
-      // } else {
-      //   report.hat = GAMEPAD_HAT_CENTERED;
-      //   report.buttons = 0;
-      //   if (has_gamepad_key) {
-      //     printf("Gamepad: Sending REPORT_ID_GAMEPAD\n");
-      //     tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
-      //   }
-
-      //   has_gamepad_key = false;
-      // }
-    }
-    break;
-
-    case REPORT_ID_JOYSTICK:
-    {
-      // use to avoid send multiple consecutive zero report for keyboard
-      static bool has_gamepad_key = false;
-
-      hid_joystick_report_t report =
-        {
-          .x   = 0, .y = 0, .z = 0,
-          .buttons = 0
-        };
-
-        report.x = angle;
-        report.buttons = GAMEPAD_BUTTON_A;
-        tud_hid_report(REPORT_ID_JOYSTICK, &report, sizeof(report));
-
-        // printf("Sending %i\n", report.x);
-
-        has_gamepad_key = false;
-    }
-    break;
-
-    default: break;
-  }
+    tud_hid_report(REPORT_ID_JOYSTICK, &report, sizeof(report));
 }
 
-// Every 10ms, we will sent 1 report for each HID profile (keyboard, mouse etc ..)
-// tud_hid_report_complete_cb() is used to send the next report after previous one is complete
 void hid_task() {
-  // Poll every 10ms
-  const uint32_t interval_ms = 10;
-  static uint32_t start_ms = 0;
+    const uint32_t interval_ms = 10;
+    static uint32_t start_ms = 0;
+    static int16_t previous_angle = -1;
 
-  if (btn) {
-    printf("Button is pressed...\n");
-  }
+    if (board_millis() - start_ms < interval_ms) { return; }
+    start_ms += interval_ms;
 
-  if (board_millis() - start_ms < interval_ms) { return; } // not enough time
-  start_ms += interval_ms;
-
-  // Remote wakeup
-  if (tud_suspended() && btn) {
-    // Wake up host if we are in suspend mode
-    // and REMOTE_WAKEUP feature is enabled by host
-    tud_remote_wakeup();
-  } else {
-    // Send the 1st of report chain, the rest will be sent by tud_hid_report_complete_cb()
-    // send_hid_report(REPORT_ID_GAMEPAD, btn);
-    send_hid_report(REPORT_ID_JOYSTICK);
-  }
+    if (!tud_hid_ready()) { return; }
+    if (previous_angle != angle) {}
+    send_joystick_hid_report();
+    previous_angle = angle;
 }
 
 //--------------------------------------------------------------------+

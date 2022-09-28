@@ -98,7 +98,14 @@ void read_angle(volatile int16_t* angle) {
       if (ret < 0) {
         *angle = ret - 3000;
       } else {
-          *angle = (buf[3] * 256 + buf[4]) * 360 / 4096;
+          float new_angle = (buf[3] * 256 + buf[4]) * 360 / 4096;
+          new_angle += profile->zero;
+          if (new_angle >= 360.0) {
+            new_angle -= 360.0;
+          } else if (new_angle < 0.0) {
+            new_angle += 360.0;
+          }
+          *angle = new_angle;
       }
     }
 }
@@ -106,16 +113,12 @@ void read_angle(volatile int16_t* angle) {
 void run_cycle() {
         desired_angle =  floor(((float)*angle) / angle_of_retch) * angle_of_retch + half_angle;
 
-        *debug_float1 = desired_angle;
-
         float error = angle_difference(desired_angle, *angle);
-        *debug_float2 = error;
 
-        // error = apply_expo(error / angle_of_retch, profile->expo) * angle_of_retch;
+        error = apply_expo(error / angle_of_retch, profile->expo) * angle_of_retch;
 
         tension = process_pid(error);
-        *debug_float3 = tension;
-
+        *debug_float1 = tension;
 
         // if (tension < 0) {
         //     tension = max(-1.0, tension) * 100;
@@ -171,13 +174,9 @@ void set_profile(profile_t* profile_in) {
 void start_second_core(
     volatile int16_t* angle_ptr,
     profile_t* profile,
-    volatile float* debug_float1_in,
-    volatile float* debug_float2_in,
-    volatile float* debug_float3_in) {
+    volatile float* debug_float1_in) {
 
     debug_float1 = debug_float1_in;
-    debug_float2 = debug_float2_in;
-    debug_float3 = debug_float3_in;
 
     angle = angle_ptr;
     set_profile(profile);
