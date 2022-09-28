@@ -15,8 +15,7 @@ target_sources(${PROJECT} PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/main.c
     ${CMAKE_CURRENT_LIST_DIR}/usb_descriptors.c
     ${CMAKE_CURRENT_LIST_DIR}/core1_loop.c
-    # ${CMAKE_CURRENT_LIST_DIR}/tusb_port.c
-    # ${CMAKE_CURRENT_LIST_DIR}/stdio_usb.c
+    ${CMAKE_CURRENT_LIST_DIR}/pid.c
 )
 
 target_include_directories(${PROJECT} PUBLIC ${CMAKE_CURRENT_LIST_DIR})
@@ -26,6 +25,7 @@ target_link_libraries(${PROJECT}
     tinyusb_device
     tinyusb_board
     hardware_i2c
+    hardware_pwm
     pico_multicore
 )
 

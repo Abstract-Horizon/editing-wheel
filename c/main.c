@@ -5,6 +5,7 @@
 #include "bsp/board.h"
 #include "pico/multicore.h"
 #include "joystick_hid.h"
+#include "profile.h"
 
 #define FLAG_VALUE 123
 
@@ -24,11 +25,40 @@ static uint32_t next_report = 0;
 static uint32_t last_button = 0;
 static volatile int16_t angle = 0;
 static volatile uint32_t reading_count = 1;
+
+static volatile float debug_float1 = 1.1;
+static volatile float debug_float2 = 2.2;
+static volatile float debug_float3 = 3.4;
+
 static uint32_t btn = false;
 
+const uint32_t direction = 1;
+const float zero = 0.0;
+
+static profile_t profile1 = { .direction = direction, .zero = zero, .dividers = 1, .expo = 0.8, .gain_factor = 2, .dead_band = 0.4};
+static profile_t profile2 = { .direction = direction, .zero = zero, .dividers = 1, .expo = -0.8, .gain_factor = 2, .dead_band = 0.4};
+static profile_t profile3 = { .direction = direction, .zero = zero, .dividers = 2, .expo = 1, .gain_factor = 1, .dead_band = 1};
+
+
+static profile_t profile4 = { .direction = direction, .zero = zero, .dividers = 32, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4};
+static profile_t profile5 = { .direction = direction, .zero = zero, .dividers = 32, .expo = -0.8, .gain_factor = 1, .dead_band = 1.8};
+static profile_t profile6 = { .direction = direction, .zero = zero, .dividers = 24, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4};
+static profile_t profile7 = { .direction = direction, .zero = zero, .dividers = 24, .expo = -0.8, .gain_factor = 1, .dead_band = 1.8};
+static profile_t profile8 = { .direction = direction, .zero = zero, .dividers = 12, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4};
+static profile_t profile9 = { .direction = direction, .zero = zero, .dividers = 12, .expo = -0.8, .gain_factor = 1, .dead_band = 1.8};
+
+static profile_t* profile = &profile6;
+
+
+extern void start_second_core(
+    volatile int16_t* angle_ptr,
+    profile_t* selected_profile,
+    volatile float* debug_float1,
+    volatile float* debug_float2,
+    volatile float* debug_float3
+);
 
 void read_angle(volatile int32_t* angle);
-extern void start_second_core(volatile int16_t* angle_ptr, volatile uint32_t* reading_count);
 
 void led_blinking_task();
 void hid_task();
@@ -40,14 +70,19 @@ bool reserved_addr(uint8_t addr) {
     return (addr & 0x78) == 0 || (addr & 0x78) == 0x78;
 }
 
+void setup_profile(profile_t* profile_in) {
+    profile = profile_in;
+}
+
 int main() {
+    setup_profile(&profile6);
     board_init();
     tusb_init();
     stdio_init_all();
     local_i2c_init();
 
     sleep_ms(10);
-    start_second_core(&angle, &reading_count);
+    start_second_core(&angle, profile, &debug_float1, &debug_float2, &debug_float3);
     sleep_ms(500);
 
     while (true) {
@@ -70,7 +105,8 @@ int main() {
         uint32_t const now = board_millis();
         if (now >= next_report) {
           next_report = now + 2000;
-          printf("Angle is %i (readings %i)\n", angle, reading_count);
+          printf("Angle is %i, d1=%.2f, d2=%.2f, d3=%.2f\n",
+              angle, debug_float1, debug_float2, debug_float3);
         }
 
         hid_task();
