@@ -15,12 +15,11 @@
  * - 2500 ms : device is suspended
  */
 enum  {
-  BLINK_NOT_MOUNTED = 250,
-  BLINK_MOUNTED = 1000,
-  BLINK_SUSPENDED = 2500,
+  BLINK_NOT_CONNECTED = 250,
+  BLINK_CONNECTED = 2500,
 };
 
-static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
+static uint32_t blink_interval_ms = BLINK_NOT_CONNECTED;
 static uint32_t next_report = 0;
 static uint32_t last_button = 0;
 static volatile int16_t angle = 0;
@@ -61,9 +60,24 @@ void read_angle(volatile int32_t* angle);
 
 void led_blinking_task();
 void hid_task();
-void local_i2c_init();
-void i2c_scan();
 
+void local_i2c_init() {
+  #if !defined(i2c_default) || !defined(PICO_DEFAULT_I2C_SDA_PIN) || !defined(PICO_DEFAULT_I2C_SCL_PIN)
+  #warning i2c/bus_scan example requires a board with I2C pins
+    printf("Default I2C pins were not defined\n");
+  #else
+    // This example will use I2C0 on the default SDA and SCL pins (GP4, GP5 on a Pico)
+    i2c_init(i2c_default, 100 * 1000);
+    gpio_set_function(PICO_DEFAULT_I2C_SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C);
+    gpio_pull_up(PICO_DEFAULT_I2C_SDA_PIN);
+    gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
+    // Make the I2C pins available to picotool
+    bi_decl(bi_2pins_with_func(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C));
+
+    printf("\nI2C Initiated\n");
+  #endif
+}
 
 bool reserved_addr(uint8_t addr) {
     return (addr & 0x78) == 0 || (addr & 0x78) == 0x78;
@@ -147,14 +161,22 @@ void hid_task() {
     const uint32_t interval_ms = 10;
     static uint32_t start_ms = 0;
     static int16_t previous_angle = -1;
+    static uint32_t first_time = true;
 
     if (board_millis() - start_ms < interval_ms) { return; }
     start_ms += interval_ms;
 
     if (!tud_hid_ready()) { return; }
-    if (previous_angle != angle) {}
-    send_joystick_hid_report();
-    previous_angle = angle;
+
+    if (previous_angle != angle) {
+        send_joystick_hid_report();
+        previous_angle = angle;
+    }
+
+    if (first_time) {
+        blink_interval_ms = BLINK_CONNECTED;
+        first_time = false;
+    }
 }
 
 //--------------------------------------------------------------------+
@@ -174,52 +196,3 @@ void led_blinking_task() {
   board_led_write(led_state);
   led_state = 1 - led_state; // toggle
 }
-
-void local_i2c_init() {
-  #if !defined(i2c_default) || !defined(PICO_DEFAULT_I2C_SDA_PIN) || !defined(PICO_DEFAULT_I2C_SCL_PIN)
-  #warning i2c/bus_scan example requires a board with I2C pins
-    printf("Default I2C pins were not defined\n");
-  #else
-    // This example will use I2C0 on the default SDA and SCL pins (GP4, GP5 on a Pico)
-    i2c_init(i2c_default, 100 * 1000);
-    gpio_set_function(PICO_DEFAULT_I2C_SDA_PIN, GPIO_FUNC_I2C);
-    gpio_set_function(PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C);
-    gpio_pull_up(PICO_DEFAULT_I2C_SDA_PIN);
-    gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
-    // Make the I2C pins available to picotool
-    bi_decl(bi_2pins_with_func(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C));
-
-    printf("\nI2C Initiated\n");
-  #endif
-}
-
-// void i2c_scan() {
-//   #if !defined(i2c_default) || !defined(PICO_DEFAULT_I2C_SDA_PIN) || !defined(PICO_DEFAULT_I2C_SCL_PIN)
-//     printf("Default I2C pins were not defined - cannot scan\n");
-//   #else
-//     printf("   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F\n");
-
-//     for (int addr = 0; addr < (1 << 7); ++addr) {
-//         if (addr % 16 == 0) {
-//             printf("%02x ", addr);
-//         }
-
-//         // Perform a 1-byte dummy read from the probe address. If a slave
-//         // acknowledges this address, the function returns the number of bytes
-//         // transferred. If the address byte is ignored, the function returns
-//         // -1.
-
-//         // Skip over any reserved addresses.
-//         int ret;
-//         uint8_t rxdata;
-//         if (reserved_addr(addr))
-//             ret = PICO_ERROR_GENERIC;
-//         else
-//             ret = i2c_read_blocking(i2c_default, addr, &rxdata, 1, false);
-
-//         printf(ret < 0 ? "." : "@");
-//         printf(addr % 16 == 15 ? "\n" : "  ");
-//     }
-//     printf("Done.\n");
-//   #endif
-// }
