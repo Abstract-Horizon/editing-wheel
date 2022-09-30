@@ -36,6 +36,11 @@
 
 #define CFG_TUSB_RHPORT0_MODE   (OPT_MODE_DEVICE)
 
+#ifndef CFG_TUD_ENDPOINT0_SIZE
+#define CFG_TUD_ENDPOINT0_SIZE    64
+#endif
+
+
 // .--------------------------------------------------------------------------.
 // |    Allow maximum number of endpoints - 4 actually required               |
 // `--------------------------------------------------------------------------'
@@ -65,10 +70,11 @@
 #define CFG_TUD_NET             (0)
 
 // .--------------------------------------------------------------------------.
-// |    Does not support Mass Storage Device (MSC)                            |
+// |    Support Mass Storage Device (MSC)                                     |
 // `--------------------------------------------------------------------------'
 
-#define CFG_TUD_MSC             (0)
+#define CFG_TUD_MSC             (1)
+#define CFG_TUD_MSC_EP_BUFSIZE  (512)
 
 // .--------------------------------------------------------------------------.
 // |    Supports HID Device (HID)                                             |

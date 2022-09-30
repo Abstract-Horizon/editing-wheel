@@ -13,6 +13,7 @@ add_executable(${PROJECT} main.c)
 
 target_sources(${PROJECT} PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/main.c
+    ${CMAKE_CURRENT_LIST_DIR}/msc_disk.c
     ${CMAKE_CURRENT_LIST_DIR}/usb_descriptors.c
     ${CMAKE_CURRENT_LIST_DIR}/core1_loop.c
     ${CMAKE_CURRENT_LIST_DIR}/pid.c

@@ -53,7 +53,7 @@
 //       | |||| |||`----------  HID     1
 //       | |||| ||`-----------  MIDI
 //       | |||| |`------------  AUDIO
-//       | |||| `-------------  MSC
+//       | |||| `-------------  MSC     1
 //       | |||`---------------  NET
 //       | ||`----------------  BTH
 //       | |`-----------------  TMC
@@ -68,7 +68,7 @@
 //     | | ||||  ||`----------  HID     1
 //     | | ||||  |`-----------  MIDI
 //     `-|-||||--|------------  AUDIO
-//       | ||||  `------------  MSC
+//       | ||||  `------------  MSC     1
 //       | |||`---------------  NET
 //       | ||`----------------  BTH
 //       | `|-----------------  TMC
@@ -79,12 +79,14 @@
 
 #define USBD_PID                ( 0xC000              +         /* 0xC011 */ \
                                   PID_MAP(CDC,     0) + \
+                                  PID_MAP(MSC,     7) + \
                                   PID_MAP(HID,     4)   )
 
 #define PID_MAP(itf, n)         ( (CFG_TUD_##itf) << (n) )
 
 #define USBD_DEV                ( 0x8000              +         /* 0x8011 */ \
                                   DEV_MAP(CDC,     0) + \
+                                  DEV_MAP(MSC,     6) + \
                                   DEV_MAP(HID,     4)   )
 
 #define DEV_MAP(itf, n)         ( (CFG_TUD_##itf) << (n) )
@@ -108,6 +110,7 @@ BI_GU_TXT("genusb device descriptor generation")
 
 BI_GU_ITF("CDC")
 BI_GU_ITF("HID (KEYBOARD, MOUSE, GAMEPAD, CONSUMER)")
+BI_GU_ITF("MSC")
 
 // ****************************************************************************
 // *                                                                          *
@@ -122,14 +125,16 @@ enum {
     USBD_STR_SERIAL_NUMBER,     // 3
     USBD_STR_CDC_NAME,          // 4
     USBD_STR_HID_NAME,          // 5
+    USBD_STR_MSC_NAME,          // 6
 };
 
 char *const usbd_desc_str[] = {
     [USBD_STR_MANUFACTURER]     = "Creative Sphere",
     [USBD_STR_PRODUCT]          = "Editing Wheel",
     [USBD_STR_SERIAL_NUMBER]    = NULL,
-    [USBD_STR_CDC_NAME]         = "CDC",
-    [USBD_STR_HID_NAME]         = "HID_KMGC",
+    [USBD_STR_CDC_NAME]         = "Creative Sphere CDC",
+    [USBD_STR_HID_NAME]         = "Creative Sphere HID",
+    [USBD_STR_MSC_NAME]         = "Creative Sphere MSC"
 };
 
 // ****************************************************************************
@@ -170,6 +175,10 @@ static const tusb_desc_device_t usbd_desc_device = {
 
 #define USBD_CDC_CMD_SIZE       (64)
 #define USBD_CDC_DATA_SIZE      (64)
+
+#define EPNUM_MSC_DATA          (0x84)
+#define EPNUM_MSC_DATA_SIZE     (64)
+
 
 // .--------------------------------------------------------------------------.
 // |    HID Device                                                            |
@@ -230,36 +239,45 @@ static const uint8_t desc_hid_report[] =
 // *                                                                          *
 // ****************************************************************************
 
-#define USBD_MAX_POWER_MA       (250)
+#define USBD_MAX_POWER_MA       (450)
 
 #define USBD_DESC_LEN           ( (TUD_CONFIG_DESC_LEN                    ) + \
                                   (TUD_CDC_DESC_LEN       * CFG_TUD_CDC   ) + \
-                                  (TUD_HID_DESC_LEN       * CFG_TUD_HID   )   )
+                                  (TUD_HID_DESC_LEN       * CFG_TUD_HID   ) + \
+                                  (TUD_MSC_DESC_LEN       * CFG_TUD_MSC   ) )
 
 enum {
-    ITF_NUM_CDC,    ITF_NUM_CDC_DATA,
+    ITF_NUM_CDC = 0,
+    ITF_NUM_CDC_DATA,
     ITF_NUM_HID,
+    ITF_NUM_MSC,
     ITF_NUM_TOTAL
 };
 
 static const uint8_t usbd_desc_cfg[USBD_DESC_LEN] = {
 
-    TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL,
+    TUD_CONFIG_DESCRIPTOR(1,
+                          ITF_NUM_TOTAL,
                           USBD_STR_LANGUAGE,
                           USBD_DESC_LEN,
-                          TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP,
+                          0, //   TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP,
                           USBD_MAX_POWER_MA),
 
     TUD_CDC_DESCRIPTOR(ITF_NUM_CDC,
-                      USBD_STR_CDC_NAME,
-                         EPNUM_CDC_CMD, USBD_CDC_CMD_SIZE,
-                         EPNUM_CDC_DATA & 0x7F,
-                         EPNUM_CDC_DATA, USBD_CDC_DATA_SIZE),
+                       USBD_STR_CDC_NAME,
+                       EPNUM_CDC_CMD, USBD_CDC_CMD_SIZE,
+                       EPNUM_CDC_DATA & 0x7F,
+                       EPNUM_CDC_DATA, USBD_CDC_DATA_SIZE),
+
+    TUD_MSC_DESCRIPTOR(ITF_NUM_MSC,
+                       USBD_STR_MSC_NAME,
+                       EPNUM_MSC_DATA & 0x7f,
+                       EPNUM_MSC_DATA, EPNUM_MSC_DATA_SIZE),
 
     TUD_HID_DESCRIPTOR(ITF_NUM_HID,
-                      USBD_STR_HID_NAME, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report),
-                         EPNUM_HID, USBD_HID_BUFSIZE, USBD_HID_POLL_INTERVAL),
-
+                       USBD_STR_HID_NAME,
+                       HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report),
+                       EPNUM_HID, USBD_HID_BUFSIZE, USBD_HID_POLL_INTERVAL),
 };
 
 // ****************************************************************************

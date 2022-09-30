@@ -15,14 +15,16 @@
  * - 2500 ms : device is suspended
  */
 enum  {
-  BLINK_NOT_CONNECTED = 250,
-  BLINK_CONNECTED = 2500,
+  BLINK_NOT_MOUNTED = 250,
+  BLINK_MOUNTED = 1000,
+  BLINK_SUSPENDED = 2500,
 };
 
-static uint32_t blink_interval_ms = BLINK_NOT_CONNECTED;
+static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
 static uint32_t next_report = 0;
 static uint32_t last_button = 0;
 static volatile int16_t angle = 0;
+static volatile int16_t last_angle = -0;
 static volatile uint32_t reading_count = 1;
 
 static volatile float debug_float1 = 1.1;
@@ -105,8 +107,10 @@ int main() {
         uint32_t const now = board_millis();
         if (now >= next_report) {
           next_report = now + 2000;
-          printf("Angle is %i, d1=%.2f, d2=%.2f, d3=%.2f\n",
-              angle, debug_float1, debug_float2, debug_float3);
+          if (last_angle != angle) {
+            printf("Angle is %i, d1=%.2f, d2=%.2f, d3=%.2f\n", angle, debug_float1, debug_float2, debug_float3);
+            last_angle = angle;
+          }
         }
 
         hid_task();
@@ -123,8 +127,42 @@ uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id,
 void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
          hid_report_type_t report_type, uint8_t const* buffer,
          uint16_t bufsize) {
-  }
+}
 
+//--------------------------------------------------------------------+
+// Device callbacks
+//--------------------------------------------------------------------+
+
+// Invoked when device is mounted
+void tud_mount_cb(void)
+{
+  blink_interval_ms = BLINK_MOUNTED;
+  printf("Mounted...");
+}
+
+// Invoked when device is unmounted
+void tud_umount_cb(void)
+{
+  blink_interval_ms = BLINK_NOT_MOUNTED;
+  printf("Unmounted...");
+}
+
+// Invoked when usb bus is suspended
+// remote_wakeup_en : if host allow us  to perform remote wakeup
+// Within 7ms, device must draw an average of current less than 2.5 mA from bus
+void tud_suspend_cb(bool remote_wakeup_en)
+{
+  (void) remote_wakeup_en;
+  blink_interval_ms = BLINK_SUSPENDED;
+  printf("Suspended...");
+}
+
+// Invoked when usb bus is resumed
+void tud_resume_cb(void)
+{
+  blink_interval_ms = BLINK_MOUNTED;
+  printf("Resumed...");
+}
 
 //--------------------------------------------------------------------+
 // USB HID
@@ -174,7 +212,7 @@ void hid_task() {
     }
 
     if (first_time) {
-        blink_interval_ms = BLINK_CONNECTED;
+        // blink_interval_ms = BLINK_CONNECTED;
         first_time = false;
     }
 }
@@ -186,13 +224,11 @@ void led_blinking_task() {
   static uint32_t start_ms = 0;
   static bool led_state = false;
 
-  // blink is disabled
   if (!blink_interval_ms) return;
 
-  // Blink every interval ms
-  if (board_millis() - start_ms < blink_interval_ms) { return; } // not enough time
+  if (board_millis() - start_ms < blink_interval_ms) { return; }
   start_ms += blink_interval_ms;
 
   board_led_write(led_state);
-  led_state = 1 - led_state; // toggle
+  led_state = 1 - led_state;
 }
