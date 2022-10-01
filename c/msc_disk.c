@@ -26,6 +26,10 @@
 #include "bsp/board.h"
 #include "tusb.h"
 #include "profile.h"
+#include "nxjson.h"
+
+
+extern void set_profile(profile_t* profile_in);
 
 // whether host does safe-eject
 static bool ejected = false;
@@ -33,6 +37,7 @@ static bool ejected = false;
 
 static volatile int16_t* angle;
 static profile_t (*profiles)[9];
+static int received_profile_number = -1;
 
 
 #define README_CONTENTS \
@@ -71,8 +76,11 @@ const uint8_t boot_sector_block_data[] = {
 const uint8_t boot_second_footer_data[] = { 0x55, 0xAA };
 
 const uint8_t fat_block_data[] = {
-    0xF8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xF8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+
+    // 0xF8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00,
+    // 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 
     // // first 2 entries must be F8FF, third entry is cluster end of readme file
 };
@@ -266,6 +274,66 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
 
     // out of ramdisk
     if (lba >= DISK_BLOCK_NUM) { return -1; }
+
+    switch (lba) {
+      break;
+      case (2): {
+        if (received_profile_number >= 0 && received_profile_number <= 8) {
+          uint8_t ptr = 64 + 32 + received_profile_number * 32 + 28;
+
+          ssize_t profile_json_size = buffer[ptr] + 256 * buffer[ptr + 1];
+          printf("Received profile %i with size %i\n", received_profile_number + 1, profile_json_size);
+
+          if (profile_json_size > 511) { profile_json_size = 511; }
+          local_buffer[profile_json_size] = 0x0; // Make it null terminated
+
+
+          printf("Got: \"%.*s\"\n", profile_json_size, local_buffer);
+
+          const nx_json* json = nx_json_parse(local_buffer, 0);
+          if (json) {
+              profile_t* profile = (*profiles + received_profile_number);
+              profile->direction = nx_json_get(json, "direction")->num.s_value;
+              profile->zero = nx_json_get(json, "zero")->num.s_value;
+              profile->dividers = nx_json_get(json, "dividers")->num.s_value;
+              profile->axis = nx_json_get(json, "axis")->num.s_value;
+              profile->expo = nx_json_get(json, "expo")->num.dbl_value;
+              profile->gain_factor = nx_json_get(json, "gain")->num.dbl_value;
+              profile->dead_band = nx_json_get(json, "dead_band")->num.dbl_value;
+
+              printf("direction=%d\n", profile->direction);
+              printf("zero=%d\n", profile->zero);
+              printf("dividers=%d\n", profile->dividers);
+              printf("axis=%d\n", profile->axis);
+              printf("expo=%f\n", profile->expo);
+              printf("gain=%f\n", profile->gain_factor);
+              printf("dead_band=%f\n", profile->dead_band);
+
+              // printf("direction=%d\n", nx_json_get(json, "direction")->num.s_value);
+              // printf("zero=%d\n", nx_json_get(json, "zero")->num.s_value);
+              // printf("dividers=%d\n", nx_json_get(json, "dividers")->num.s_value);
+              // printf("axis=%d\n", nx_json_get(json, "axis")->num.s_value);
+              // printf("expo=%f\n", nx_json_get(json, "expo")->num.dbl_value);
+              // printf("gain=%f\n", nx_json_get(json, "gain")->num.dbl_value);
+              // printf("dead_band=%f\n", nx_json_get(json, "dead_band")->num.dbl_value);
+
+              nx_json_free(json);
+
+              set_profile(profiles[received_profile_number]);
+          }
+
+          received_profile_number = -1;
+        }
+      }
+      break;
+      case 5 ... 13: {
+          received_profile_number = lba - 5;
+          memcpy(local_buffer, buffer, bufsize);
+      }
+      break;
+      default: break;
+    }
+
 
     // TODO not readonly and not writable
     // uint8_t* addr = msc_disk[lba] + offset;

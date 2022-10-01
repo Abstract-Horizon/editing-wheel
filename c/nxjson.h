@@ -24,6 +24,13 @@
 extern "C" {
 #endif
 
+#define NXJSON_TYPE_U64 1
+#define NXJSON_TYPE_S64 1
+
+typedef uint32_t nxjson_u64;
+typedef int32_t nxjson_s64;
+
+
 #ifndef NXJSON_TYPE_U64
 
 #include <stdint.h>

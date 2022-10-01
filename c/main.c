@@ -57,7 +57,7 @@ extern void start_second_core(
     profile_t* selected_profile,
     volatile float* debug_float1
 );
-extern void init_msc(volatile int16_t* angle_in, profile_t *profiles[9]);
+extern void init_msc(volatile int16_t* angle_in, profile_t (*profiles_in)[9]);
 
 
 void led_blinking_task();
@@ -88,12 +88,12 @@ void setup_profile(profile_t* profile_in) {
 }
 
 int main() {
-    setup_profile(&profiles[6]);
+    setup_profile(&profiles[0]);
     board_init();
     tusb_init();
     stdio_init_all();
     local_i2c_init();
-    init_msc(&angle, profiles);
+    init_msc(&angle, &profiles);
 
     sleep_ms(10);
     start_second_core(&angle, profile, &debug_float1);
