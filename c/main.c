@@ -57,8 +57,8 @@ extern void start_second_core(
     profile_t* selected_profile,
     volatile float* debug_float1
 );
+extern void init_msc(volatile int16_t* angle_in);
 
-void read_angle(volatile int32_t* angle);
 
 void led_blinking_task();
 void hid_task();
@@ -68,13 +68,11 @@ void local_i2c_init() {
   #warning i2c/bus_scan example requires a board with I2C pins
     printf("Default I2C pins were not defined\n");
   #else
-    // This example will use I2C0 on the default SDA and SCL pins (GP4, GP5 on a Pico)
     i2c_init(i2c_default, 100 * 1000);
     gpio_set_function(PICO_DEFAULT_I2C_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(PICO_DEFAULT_I2C_SDA_PIN);
     gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
-    // Make the I2C pins available to picotool
     bi_decl(bi_2pins_with_func(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C));
 
     printf("\nI2C Initiated\n");
@@ -95,6 +93,7 @@ int main() {
     tusb_init();
     stdio_init_all();
     local_i2c_init();
+    init_msc(&angle);
 
     sleep_ms(10);
     start_second_core(&angle, profile, &debug_float1);
