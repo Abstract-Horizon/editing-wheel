@@ -111,41 +111,41 @@ void read_angle(volatile int16_t* angle) {
 }
 
 void run_cycle() {
-        desired_angle =  floor(((float)*angle) / angle_of_retch) * angle_of_retch + half_angle;
+    desired_angle =  floor(((float)*angle) / angle_of_retch) * angle_of_retch + half_angle;
 
-        float error = angle_difference(desired_angle, *angle);
+    float error = angle_difference(desired_angle, *angle);
 
-        error = apply_expo(error / angle_of_retch, profile->expo) * angle_of_retch;
+    error = apply_expo(error / angle_of_retch, profile->expo) * angle_of_retch;
 
-        tension = process_pid(error);
-        *debug_float1 = tension;
+    tension = process_pid(error);
+    *debug_float1 = tension;
 
-        // if (tension < 0) {
-        //     tension = max(-1.0, tension) * 100;
-        // } else {
-        //     tension = min(1.0, tension) * 100;
-        // }
+    // if (tension < 0) {
+    //     tension = max(-1.0, tension) * 100;
+    // } else {
+    //     tension = min(1.0, tension) * 100;
+    // }
 
-        if (tension < 0) {
-            tension = max_f(-100.0, tension);
-        } else {
-            tension = min_f(100.0, tension);
-        }
+    if (tension < 0) {
+        tension = max_f(-100.0, tension);
+    } else {
+        tension = min_f(100.0, tension);
+    }
 
-        pwm_set_freq_duty(pwm_slice_num, pwn_channel, pwm_frequency, (int)((tension >= 0) ? tension : -tension));
+    pwm_set_freq_duty(pwm_slice_num, pwn_channel, pwm_frequency, (int)((tension >= 0) ? tension : -tension));
 
-        int32_t tension_direction = ((tension > 0) ? 1 : -1) * profile->direction;
+    int32_t tension_direction = ((tension > 0) ? 1 : -1) * profile->direction;
 
-        if (tension_direction >= 0) {
-            gpio_put(PIN_AIN1, 0);
-            gpio_put(PIN_AIN2, 1);
-        } else if (tension_direction < 0) {
-            gpio_put(PIN_AIN1, 1);
-            gpio_put(PIN_AIN2, 0);
-        } else {
-            gpio_put(PIN_AIN1, 1);
-            gpio_put(PIN_AIN2, 1);
-        }
+    if (tension_direction >= 0) {
+        gpio_put(PIN_AIN1, 0);
+        gpio_put(PIN_AIN2, 1);
+    } else if (tension_direction < 0) {
+        gpio_put(PIN_AIN1, 1);
+        gpio_put(PIN_AIN2, 0);
+    } else {
+        gpio_put(PIN_AIN1, 1);
+        gpio_put(PIN_AIN2, 1);
+    }
 }
 
 

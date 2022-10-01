@@ -17,6 +17,7 @@ target_sources(${PROJECT} PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/usb_descriptors.c
     ${CMAKE_CURRENT_LIST_DIR}/core1_loop.c
     ${CMAKE_CURRENT_LIST_DIR}/pid.c
+    ${CMAKE_CURRENT_LIST_DIR}/nxjson.c
 )
 
 target_include_directories(${PROJECT} PUBLIC ${CMAKE_CURRENT_LIST_DIR})
