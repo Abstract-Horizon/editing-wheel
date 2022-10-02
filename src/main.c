@@ -29,15 +29,15 @@ const uint32_t direction = 1;
 const float zero = 235.0;
 
 profile_t profiles[9] = {
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 1, .expo = 0.8, .gain_factor = 2, .dead_band = 0.4},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 1, .expo = -0.8, .gain_factor = 2, .dead_band = 0.4},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 2, .expo = 1, .gain_factor = 1, .dead_band = 1},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 32, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 32, .expo = -0.8, .gain_factor = 1, .dead_band = 1.8},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 24, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 24, .expo = -0.8, .gain_factor = 1, .dead_band = 1.8},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 12, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 12, .expo = -0.8, .gain_factor = 1, .dead_band = 1.8}
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 1,  .expo = -0.9,  .gain_factor = 2,    .dead_band = 0.4},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 12, .expo = -0.25, .gain_factor = 1,    .dead_band = 0.4},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 12, .expo = -0.9,  .gain_factor = 1,    .dead_band = 0.8},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 24, .expo = 0.9,   .gain_factor = 1,    .dead_band = 0.4},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 24, .expo = -0.8,  .gain_factor = 1,    .dead_band = 0.4},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 32, .expo = 0.9,   .gain_factor = 1,    .dead_band = 0.4},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 32, .expo = -0.8,  .gain_factor = 0.5, .dead_band = 0.8},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 48, .expo = 0.9,   .gain_factor = 1,    .dead_band = 0.4},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 48, .expo = -0.8,  .gain_factor = 0.5, .dead_band = 0.8},
 };
 
 uint32_t selected_profile = 6;
