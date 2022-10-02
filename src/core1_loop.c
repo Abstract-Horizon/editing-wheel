@@ -7,6 +7,10 @@
 #include "pico/multicore.h"
 #include "profile.h"
 
+extern volatile int16_t angle;
+extern profile_t profiles[9];
+extern uint32_t selected_profile;
+
 extern void init_pid(float kp_in, float ki_in, float kd_in, float gain_in, float dead_band_in);
 extern float process_pid(float error);
 
@@ -14,17 +18,9 @@ extern float process_pid(float error);
 #define PIN_AIN1 3
 #define PIN_PWM 0
 
-const uint8_t ADDRESS = 0x36;
-
-static volatile float* debug_float1;
-static volatile float* debug_float2;
-static volatile float* debug_float3;
-
-static profile_t* profile;
+const uint8_t AS5600_ADDRESS = 0x36;
 
 static uint32_t stop = false;
-
-volatile int16_t* angle;
 
 static uint32_t start_ms = 0;
 
@@ -42,11 +38,6 @@ static uint32_t last_status = 0;
 static uint pwm_slice_num = 0;
 static uint pwn_channel = 0;
 static uint32_t pwm_frequency = 1000;
-
-int ret;
-uint8_t buf[5];
-
-uint8_t reg = 0x0B;
 
 
 float max_f(float a, float b) {
@@ -70,7 +61,6 @@ uint32_t pwm_set_freq_duty(uint slice_num, uint chan, uint32_t f, int d) {
     return wrap;
 }
 
-
 float angle_difference(float a1, float a2) {
     float diff = a1 - a2;
     if (diff >= 180.0) {
@@ -89,36 +79,38 @@ float apply_expo(float value, float expo_percentage) {
     }
 }
 
-void read_angle(volatile int16_t* angle) {
-    ret = i2c_write_blocking(i2c_default, ADDRESS, &reg, 1, true);
+uint8_t as5600_reg = 0x0B;
+uint8_t buf[5];
+
+void read_angle() {
+    int ret = i2c_write_blocking(i2c_default, AS5600_ADDRESS, &as5600_reg, 1, true);
     if (ret < 0) {
-      *angle = ret - 2000;
+        angle = ret - 2000;
     } else {
-      ret = i2c_read_blocking(i2c_default, ADDRESS, buf, 5, false);
-      if (ret < 0) {
-        *angle = ret - 3000;
-      } else {
-          float new_angle = (buf[3] * 256 + buf[4]) * 360 / 4096;
-          new_angle += profile->zero;
-          if (new_angle >= 360.0) {
-            new_angle -= 360.0;
-          } else if (new_angle < 0.0) {
-            new_angle += 360.0;
-          }
-          *angle = new_angle;
-      }
+        ret = i2c_read_blocking(i2c_default, AS5600_ADDRESS, buf, 5, false);
+        if (ret < 0) {
+            angle = ret - 3000;
+        } else {
+            int16_t new_angle = (buf[3] * 256 + buf[4]) * 360 / 4096;
+            new_angle += profiles[selected_profile].zero;
+            if (new_angle >= 360) {
+                new_angle -= 360;
+            } else if (new_angle < 0) {
+                new_angle += 360;
+            }
+            angle = new_angle;
+        }
     }
 }
 
 void run_cycle() {
-    desired_angle =  floor(((float)*angle) / angle_of_retch) * angle_of_retch + half_angle;
+    desired_angle =  floor(((float)angle) / angle_of_retch) * angle_of_retch + half_angle;
 
-    float error = angle_difference(desired_angle, *angle);
+    float error = angle_difference(desired_angle, angle);
 
-    error = apply_expo(error / angle_of_retch, profile->expo) * angle_of_retch;
+    error = apply_expo(error / angle_of_retch, profiles[selected_profile].expo) * angle_of_retch;
 
     tension = process_pid(error);
-    *debug_float1 = tension;
 
     // if (tension < 0) {
     //     tension = max(-1.0, tension) * 100;
@@ -134,7 +126,7 @@ void run_cycle() {
 
     pwm_set_freq_duty(pwm_slice_num, pwn_channel, pwm_frequency, (int)((tension >= 0) ? tension : -tension));
 
-    int32_t tension_direction = ((tension > 0) ? 1 : -1) * profile->direction;
+    int32_t tension_direction = ((tension > 0) ? 1 : -1) * profiles[selected_profile].direction;
 
     if (tension_direction >= 0) {
         gpio_put(PIN_AIN1, 0);
@@ -152,7 +144,7 @@ void run_cycle() {
 void core1_entry() {
     start_ms = board_millis();
     while (true) {
-        read_angle(angle);
+        read_angle();
         uint32_t now = board_millis();
         if (now >= start_ms + 10) {
           run_cycle();
@@ -161,25 +153,22 @@ void core1_entry() {
     }
 }
 
-void set_profile(profile_t* profile_in) {
-    profile = profile_in;
-    float gain = profile->gain_factor * ((float)profile->dividers) / 1.25;
-    init_pid(0.7, 0.0, 0.01, gain, profile->dead_band);
+void set_profile(uint32_t selected_profile_number) {
+    if (selected_profile_number >= 0 && selected_profile_number < 9) {
+        selected_profile = selected_profile_number;
 
-    angle_of_retch = (360.0 / (float)profile->dividers);
-    half_angle = angle_of_retch / 2.0;
-    half_distance_tension_factor = 100.0 / half_angle;
+        float gain = profiles[selected_profile].gain_factor * ((float)profiles[selected_profile].dividers) / 1.25;
+        init_pid(0.7, 0.0, 0.01, gain, profiles[selected_profile].dead_band);
+
+        angle_of_retch = (360.0 / (float)profiles[selected_profile].dividers);
+        half_angle = angle_of_retch / 2.0;
+        half_distance_tension_factor = 100.0 / half_angle;
+    }
 }
 
-void start_second_core(
-    volatile int16_t* angle_ptr,
-    profile_t* profile,
-    volatile float* debug_float1_in) {
+void start_second_core() {
 
-    debug_float1 = debug_float1_in;
-
-    angle = angle_ptr;
-    set_profile(profile);
+    set_profile(selected_profile);
 
     gpio_init(PIN_AIN1);
     gpio_set_dir(PIN_AIN1, GPIO_OUT);

@@ -29,21 +29,33 @@
 #include "nxjson.h"
 
 
-extern void set_profile(profile_t* profile_in);
+extern void set_profile(uint32_t selected_profile_number);
 
-// whether host does safe-eject
+extern volatile int16_t angle;
+extern profile_t profiles[9];
+extern uint32_t selected_profile;
+
 static bool ejected = false;
-
-
-static volatile int16_t* angle;
-static profile_t (*profiles)[9];
 static int received_profile_number = -1;
 
 
 #define README_CONTENTS \
-"This is tinyusb's MassStorage Class demo.\n\n\
-If you find any bugs or get any questions, feel free to file an\n\
-issue at github.com/hathach/tinyusb\n"
+"Editing Wheel\n\n\
+See more at https://github.com/Abstract-Horizon/editing-wheel\n\n\
+Files: \n\
+- README.TXT   - this file \n\
+- PROFILE.TXT  - selected profile - only one char (1-9).\n\
+    Write to it to select profile.\n\
+    Read to see selected profile\n\
+- PROFILEx.TXT - JSON for profile 'x' (x in 1-9)\n\
+    Write to it to override existing values.\n\
+- ANGLE.TXT    - Current position of the wheel\n\
+    Note: filesystem is cached so it doesn't\n\
+    really represent current value\n\
+"
+#define README_CONTENTS_SIZE_L (sizeof(README_CONTENTS) - 1) & 0xFF
+#define README_CONTENTS_SIZE_H ((sizeof(README_CONTENTS) - 1) & 0xFF00) >> 8
+
 
 enum
 {
@@ -51,10 +63,6 @@ enum
   DISK_BLOCK_SIZE = 512
 };
 
-void init_msc(volatile int16_t* angle_in, profile_t (*profiles_in)[9]) {
-    angle = angle_in;
-    profiles = profiles_in;
-}
 
 uint8_t local_buffer[DISK_BLOCK_SIZE] = {};
 
@@ -92,13 +100,19 @@ const uint8_t root_dir_volume_name_data[] = {
 
 const uint8_t root_dir_readme_file_data[] = {
     'R' , 'E' , 'A' , 'D' , 'M' , 'E' , ' ' , ' ' , 'T' , 'X' , 'T' , 0x20, 0x00, 0xC6, 0x52, 0x6D,
-    0x65, 0x43, 0x65, 0x43, 0x00, 0x00, 0x88, 0x6D, 0x65, 0x43, 0x02, 0x00, sizeof(README_CONTENTS)-1, 0x00, 0x00, 0x00, // readme's files size (4 Bytes)
+    0x65, 0x43, 0x65, 0x43, 0x00, 0x00, 0x88, 0x6D, 0x65, 0x43, 0x02, 0x00, README_CONTENTS_SIZE_L, README_CONTENTS_SIZE_H, 0x00, 0x00, // readme's files size (4 Bytes)
 };
 
 const uint8_t root_dir_entry_template[] = {
-    'A' , 'N' , 'G' , 'L' , 'E' , ' ' , ' ' , ' ' , ' ' , ' ' , ' ' , 0x20, 0x00, 0x1A, 0x27, 0x6E,
+    'A' , 'N' , 'G' , 'L' , 'E' , ' ' , ' ' , ' ' , 'T' , 'X' , 'T' , 0x20, 0x00, 0x1A, 0x27, 0x6E,
     0x41, 0x55, 0x41, 0x55, 0x00, 0x00, 0x27, 0x6E, 0x41, 0x55, 0x03, 0x00, 0x04, 0x00, 0x00, 0x00,
 };
+
+const uint8_t root_dir_profile_file_data[] = {
+    'P' , 'R' , 'O' , 'F' , 'I' , 'L' , 'E' , ' ' , 'T' , 'X' , 'T' , 0x20, 0x00, 0xC6, 0x52, 0x6D,
+    0x65, 0x43, 0x65, 0x43, 0x00, 0x00, 0x88, 0x6D, 0x65, 0x43, 0x0D, 0x00, 1, 0x00, 0x00, 0x00, // readme's files size (4 Bytes)
+};
+
 
 
 const uint8_t readme_block_data[] = README_CONTENTS;
@@ -115,16 +129,15 @@ const uint8_t readme_block_data[] = README_CONTENTS;
 
 
 ssize_t output_profile(uint8_t* buffer, int profile_no) {
-    profile_t* profile = (*profiles + profile_no);
     return sprintf(
         buffer, PROFILE_JSON_TEMPLATE,
-        profile->direction,
-        profile->zero,
-        profile->dividers,
-        profile->axis,
-        profile->expo,
-        profile->gain_factor,
-        profile->dead_band
+        profiles[profile_no].direction,
+        profiles[profile_no].zero,
+        profiles[profile_no].dividers,
+        profiles[profile_no].axis,
+        profiles[profile_no].expo,
+        profiles[profile_no].gain_factor,
+        profiles[profile_no].dead_band
     );
 }
 
@@ -227,6 +240,7 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
               local_buffer[64 + 32 * i + 30] = 0;
               local_buffer[64 + 32 * i + 31] = 0;
           }
+          memcpy(local_buffer + 32 * 11, root_dir_profile_file_data, sizeof(root_dir_profile_file_data));
           memcpy(buffer, local_buffer, bufsize);
       }
       break;
@@ -235,7 +249,7 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
       }
       break;
       case (4): {
-          sprintf(local_buffer, "%04d", *angle);
+          sprintf(local_buffer, "%04d", angle);
           memcpy(buffer, local_buffer, bufsize);
       }
       break;
@@ -246,7 +260,8 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
       }
       break;
       case (14): {
-
+          sprintf(local_buffer, "%1d", selected_profile);
+          memcpy(buffer, local_buffer, bufsize);
       }
       break;
       case (15): {
@@ -292,34 +307,25 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
 
           const nx_json* json = nx_json_parse(local_buffer, 0);
           if (json) {
-              profile_t* profile = (*profiles + received_profile_number);
-              profile->direction = nx_json_get(json, "direction")->num.s_value;
-              profile->zero = nx_json_get(json, "zero")->num.s_value;
-              profile->dividers = nx_json_get(json, "dividers")->num.s_value;
-              profile->axis = nx_json_get(json, "axis")->num.s_value;
-              profile->expo = nx_json_get(json, "expo")->num.dbl_value;
-              profile->gain_factor = nx_json_get(json, "gain")->num.dbl_value;
-              profile->dead_band = nx_json_get(json, "dead_band")->num.dbl_value;
+              profiles[received_profile_number].direction = nx_json_get(json, "direction")->num.s_value;
+              profiles[received_profile_number].zero = nx_json_get(json, "zero")->num.s_value;
+              profiles[received_profile_number].dividers = nx_json_get(json, "dividers")->num.s_value;
+              profiles[received_profile_number].axis = nx_json_get(json, "axis")->num.s_value;
+              profiles[received_profile_number].expo = nx_json_get(json, "expo")->num.dbl_value;
+              profiles[received_profile_number].gain_factor = nx_json_get(json, "gain")->num.dbl_value;
+              profiles[received_profile_number].dead_band = nx_json_get(json, "dead_band")->num.dbl_value;
 
-              printf("direction=%d\n", profile->direction);
-              printf("zero=%d\n", profile->zero);
-              printf("dividers=%d\n", profile->dividers);
-              printf("axis=%d\n", profile->axis);
-              printf("expo=%f\n", profile->expo);
-              printf("gain=%f\n", profile->gain_factor);
-              printf("dead_band=%f\n", profile->dead_band);
-
-              // printf("direction=%d\n", nx_json_get(json, "direction")->num.s_value);
-              // printf("zero=%d\n", nx_json_get(json, "zero")->num.s_value);
-              // printf("dividers=%d\n", nx_json_get(json, "dividers")->num.s_value);
-              // printf("axis=%d\n", nx_json_get(json, "axis")->num.s_value);
-              // printf("expo=%f\n", nx_json_get(json, "expo")->num.dbl_value);
-              // printf("gain=%f\n", nx_json_get(json, "gain")->num.dbl_value);
-              // printf("dead_band=%f\n", nx_json_get(json, "dead_band")->num.dbl_value);
+              printf("direction=%d\n", profiles[received_profile_number].direction);
+              printf("zero=%d\n",      profiles[received_profile_number].zero);
+              printf("dividers=%d\n",  profiles[received_profile_number].dividers);
+              printf("axis=%d\n",      profiles[received_profile_number].axis);
+              printf("expo=%f\n",      profiles[received_profile_number].expo);
+              printf("gain=%f\n",      profiles[received_profile_number].gain_factor);
+              printf("dead_band=%f\n", profiles[received_profile_number].dead_band);
 
               nx_json_free(json);
 
-              set_profile(profiles[received_profile_number]);
+            //   set_profile(received_profile_number);
           }
 
           received_profile_number = -1;
@@ -329,6 +335,15 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
       case 5 ... 13: {
           received_profile_number = lba - 5;
           memcpy(local_buffer, buffer, bufsize);
+      }
+      break;
+      case 14: {
+          uint32_t selection = buffer[0] - '1';
+          if (selection >= 0 && selection < 9) {
+              set_profile(selection);
+              printf("Selected profile %d", selection);
+
+          }
       }
       break;
       default: break;

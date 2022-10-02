@@ -20,23 +20,15 @@ enum  {
   BLINK_SUSPENDED = 2500,
 };
 
-static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
-static uint32_t next_report = 0;
-static uint32_t last_button = 0;
-static volatile int16_t angle = 0;
-static volatile int16_t last_angle = -0;
-static volatile uint32_t reading_count = 1;
+volatile int16_t angle = 0;
+volatile int16_t last_angle = -1;
 
-static volatile float debug_float1 = 1.1;
-static volatile float debug_float2 = 2.2;
-static volatile float debug_float3 = 3.4;
-
-static uint32_t btn = false;
+extern void start_second_core();
 
 const uint32_t direction = 1;
 const float zero = 235.0;
 
-static profile_t profiles[9] = {
+profile_t profiles[9] = {
     { .direction = direction, .zero = zero, .axis=0, .dividers = 1, .expo = 0.8, .gain_factor = 2, .dead_band = 0.4},
     { .direction = direction, .zero = zero, .axis=0, .dividers = 1, .expo = -0.8, .gain_factor = 2, .dead_band = 0.4},
     { .direction = direction, .zero = zero, .axis=0, .dividers = 2, .expo = 1, .gain_factor = 1, .dead_band = 1},
@@ -48,17 +40,14 @@ static profile_t profiles[9] = {
     { .direction = direction, .zero = zero, .axis=0, .dividers = 12, .expo = -0.8, .gain_factor = 1, .dead_band = 1.8}
 };
 
+uint32_t selected_profile = 6;
 
-static profile_t* profile = &profiles[1];
 
+static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
+static uint32_t next_report = 0;
+static uint32_t last_button = 0;
 
-extern void start_second_core(
-    volatile int16_t* angle_ptr,
-    profile_t* selected_profile,
-    volatile float* debug_float1
-);
-extern void init_msc(volatile int16_t* angle_in, profile_t (*profiles_in)[9]);
-
+static uint32_t btn = false;
 
 void led_blinking_task();
 void hid_task();
@@ -83,21 +72,13 @@ bool reserved_addr(uint8_t addr) {
     return (addr & 0x78) == 0 || (addr & 0x78) == 0x78;
 }
 
-void setup_profile(profile_t* profile_in) {
-    profile = profile_in;
-}
-
 int main() {
-    setup_profile(&profiles[0]);
     board_init();
     tusb_init();
     stdio_init_all();
     local_i2c_init();
-    init_msc(&angle, &profiles);
-
+    start_second_core();
     sleep_ms(10);
-    start_second_core(&angle, profile, &debug_float1);
-    sleep_ms(500);
 
     while (true) {
         tud_task();
@@ -107,7 +88,7 @@ int main() {
         if (now >= next_report) {
           next_report = now + 2000;
           if (last_angle != angle) {
-            printf("Angle is %i, d1=%.2f, d2=%.2f, d3=%.2f\n", angle, debug_float1, debug_float2, debug_float3);
+            printf("Angle is %i\n", angle);
             last_angle = angle;
           }
         }
@@ -175,7 +156,7 @@ static void send_joystick_hid_report() {
     };
 
 
-    switch (profile->axis) {
+    switch (profiles[selected_profile].axis) {
         case 0: {
             report.x = angle;
         }

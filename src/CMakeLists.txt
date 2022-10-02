@@ -1,7 +1,5 @@
 
-# /home/pi/pico/pico-sdk/src/rp2_common/pico_stdio_usb/stdio_usb.c
-
-set(PROJECT cdc_plus_hid)
+set(PROJECT editing_wheel)
 
 cmake_minimum_required(VERSION 3.12)
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
