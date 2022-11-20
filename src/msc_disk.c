@@ -28,6 +28,7 @@
 #include "profile.h"
 #include "nxjson.h"
 
+// #define DEBUG_MSC = 1
 
 extern void set_profile(uint32_t selected_profile_number);
 
@@ -270,7 +271,9 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
       break;
       default: break;
     }
+#ifdef DEBUG_MSC
     printf("Received read lba=%i, offset=%i\n", lba, offset);
+#endif
     return (int32_t) bufsize;
 }
 
@@ -303,8 +306,9 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
           local_buffer[profile_json_size] = 0x0; // Make it null terminated
 
 
+#ifdef DEBUG_MSC
           printf("Got: \"%.*s\"\n", profile_json_size, local_buffer);
-
+#endif
           const nx_json* json = nx_json_parse(local_buffer, 0);
           if (json) {
               profiles[received_profile_number].direction = nx_json_get(json, "direction")->num.s_value;
@@ -322,7 +326,6 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
               printf("expo=%f\n",      profiles[received_profile_number].expo);
               printf("gain=%f\n",      profiles[received_profile_number].gain_factor);
               printf("dead_band=%f\n", profiles[received_profile_number].dead_band);
-
               nx_json_free(json);
 
             //   set_profile(received_profile_number);
@@ -355,7 +358,9 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
     // memcpy(addr, buffer, bufsize);
 
     (void) lba; (void) offset; (void) buffer;
+#ifdef DEBUG_MSC
     printf("Received write lba=%i, offset=%i\n", lba, offset);
+#endif
     return (int32_t) bufsize;
 }
 

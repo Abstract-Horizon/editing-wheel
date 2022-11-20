@@ -6,6 +6,7 @@
 #include "hardware/pwm.h"
 #include "pico/multicore.h"
 #include "profile.h"
+#include "neokey.h"
 
 extern volatile int16_t angle;
 extern profile_t profiles[9];
@@ -13,6 +14,10 @@ extern uint32_t selected_profile;
 
 extern void init_pid(float kp_in, float ki_in, float kd_in, float gain_in, float dead_band_in);
 extern float process_pid(float error);
+
+extern void write_leds();
+extern void show_leds();
+extern uint8_t leds[12];
 
 #define PIN_AIN2 2
 #define PIN_AIN1 3
@@ -22,7 +27,9 @@ const uint8_t AS5600_ADDRESS = 0x36;
 
 static uint32_t stop = false;
 
-static uint32_t start_ms = 0;
+static uint32_t run_cycle_at = 0;
+static uint32_t write_leds_at = 0;
+static uint32_t show_leds_at = 0;
 
 static float desired_angle;
 static float angle_of_retch = 0.0;
@@ -79,11 +86,11 @@ float apply_expo(float value, float expo_percentage) {
     }
 }
 
-uint8_t as5600_reg = 0x0B;
+uint8_t as5600_reg[1] = {0x0B};
 uint8_t buf[5];
 
 void read_angle() {
-    int ret = i2c_write_blocking(i2c_default, AS5600_ADDRESS, &as5600_reg, 1, true);
+    int ret = i2c_write_blocking(i2c_default, AS5600_ADDRESS, as5600_reg, 1, true);
     if (ret < 0) {
         angle = ret - 2000;
     } else {
@@ -104,6 +111,8 @@ void read_angle() {
 }
 
 void run_cycle() {
+    read_angle();
+
     desired_angle =  floor(((float)angle) / angle_of_retch) * angle_of_retch + half_angle;
 
     float error = angle_difference(desired_angle, angle);
@@ -142,13 +151,24 @@ void run_cycle() {
 
 
 void core1_entry() {
-    start_ms = board_millis();
+    printf("Started second core\n");
+    run_cycle_at = board_millis() + 10;
+    write_leds_at = board_millis() + 12;
+    show_leds_at = write_leds_at + 2;
     while (true) {
-        read_angle();
         uint32_t now = board_millis();
-        if (now >= start_ms + 10) {
+        if (now >= run_cycle_at) {
           run_cycle();
-          start_ms = now;
+          run_cycle_at = now + 10;
+        }
+        if (now >= write_leds_at) {
+            write_leds();
+            write_leds_at = now + 100;
+            leds[0] += 16;
+        }
+        if (now >= show_leds_at) {
+            show_leds_at = write_leds_at + 2;
+            show_leds();
         }
     }
 }
@@ -184,5 +204,6 @@ void start_second_core() {
     pwm_set_freq_duty(pwm_slice_num, pwn_channel, pwm_frequency, 100);
     pwm_set_enabled(pwm_slice_num, true);
 
+    printf("Starting second core\n");
     multicore_launch_core1(core1_entry);
 }

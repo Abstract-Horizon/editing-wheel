@@ -6,6 +6,8 @@
 #include "pico/multicore.h"
 #include "joystick_hid.h"
 #include "profile.h"
+#include "neokey.h"
+
 
 #define FLAG_VALUE 123
 
@@ -20,10 +22,30 @@ enum  {
   BLINK_SUSPENDED = 2500,
 };
 
+enum {
+  STATE_BOOTING = 0,
+  STATE_INITIALISE = 1,
+  STATE_START_SECOND_CORE = 2,
+  STATE_PREPARE_TO_RUN = 3,
+  STATE_RUNNING = 4,
+  STATE_STOPPED = 5,
+};
+
 volatile int16_t angle = 0;
 volatile int16_t last_angle = -1;
 
+extern void neokey_init();
+extern void write_leds();
+extern uint8_t leds[12];
+
+
 extern void start_second_core();
+extern void process_keys(uint8_t buttons_state, uint32_t now);
+extern uint8_t read_keys_raw();
+extern int get_key_state(uint32_t key_num);
+
+extern neokey_key_t keys[4];
+extern uint8_t leds[12];
 
 const uint32_t direction = 1;
 const float zero = 235.0;
@@ -42,12 +64,13 @@ profile_t profiles[9] = {
 
 uint32_t selected_profile = 6;
 
-
 static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
 static uint32_t next_report = 0;
 static uint32_t last_button = 0;
 
 static uint32_t btn = false;
+static uint16_t initialise_state = STATE_BOOTING;
+
 
 void led_blinking_task();
 void hid_task();
@@ -68,32 +91,85 @@ void local_i2c_init() {
   #endif
 }
 
+
 bool reserved_addr(uint8_t addr) {
     return (addr & 0x78) == 0 || (addr & 0x78) == 0x78;
+}
+
+void keys_task(uint32_t now) {
+    uint8_t buttons_state = read_keys_raw();
+    process_keys(buttons_state, now);
+
+    for (int i = 0; i < 4; i++) {
+        int key_state = get_key_state(i);
+        switch (key_state) {
+            case (KEY_PRESSED): {
+                printf("Key %d pressed.", i);
+
+            }
+            break;
+            case (KEY_LONG_PRESSED): {
+                printf("Key %d long pressed.", i);
+
+            }
+            break;
+            case (KEY_RELEASED): {
+                printf("Key %d released.", i);
+
+            }
+            break;
+            default: break;
+        }
+    }
 }
 
 int main() {
     board_init();
     tusb_init();
     stdio_init_all();
-    local_i2c_init();
-    start_second_core();
-    sleep_ms(10);
+   
+    // local_i2c_init();
+    // neokey_init();
+    // start_second_core();
+    // sleep_ms(10);
 
+    initialise_state = STATE_INITIALISE;
+
+    uint32_t next_event = board_millis() + 2000;
     while (true) {
+        uint32_t const now = board_millis();
+
         tud_task();
         led_blinking_task();
 
-        uint32_t const now = board_millis();
-        if (now >= next_report) {
-          next_report = now + 2000;
-          if (last_angle != angle) {
-            printf("Angle is %i\n", angle);
-            last_angle = angle;
-          }
+        if (initialise_state == STATE_INITIALISE && now > next_event) {
+          next_event = now + 100;
+          initialise_state = STATE_STOPPED;
+          initialise_state = STATE_START_SECOND_CORE;
+          local_i2c_init();
+          neokey_init();
         }
+        if (initialise_state == STATE_START_SECOND_CORE && now > next_event) {
+          start_second_core();
+          next_event = now + 100;
+          initialise_state = STATE_PREPARE_TO_RUN;
+        }
+        if (initialise_state == STATE_PREPARE_TO_RUN && now > next_event) {
+          initialise_state = STATE_RUNNING;
+        }
+        if (initialise_state == STATE_RUNNING) {
+          // keys_task(now);
 
-        hid_task();
+          if (now >= next_report) {
+            next_report = now + 2000;
+            if (last_angle != angle) {
+              printf("Angle is %i\n", angle);
+              last_angle = angle;
+            }
+          }
+
+          hid_task();
+        }
     }
 }
 
