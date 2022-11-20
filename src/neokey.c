@@ -5,6 +5,8 @@
 #include "hardware/i2c.h"
 #include "neokey.h"
 
+uint8_t buttons[4] = {0, 0, 0, 0};
+uint8_t buttons_state = 0;
 uint8_t leds[12] = {0x20, 0, 0, 0x20, 0x20, 0, 0, 0x20, 0, 0, 0x20, 0x20};
 
 static uint8_t buf[20];
@@ -43,43 +45,56 @@ void neokey_init() {
 
     buf[0] = GPIO_BASE;
     buf[1] = GPIO_DIRCLR_BULK;
-    buf[2] =(uint8_t)(BUTTON_MASK >> 24);
-    buf[3] =(uint8_t)(BUTTON_MASK >> 16);
-    buf[4] =(uint8_t)(BUTTON_MASK >> 8);
-    buf[5] =(uint8_t)(BUTTON_MASK);
+    buf[2] = 0;
+    buf[3] = 0;
+    buf[4] = 0;
+    buf[5] = (uint8_t)(BUTTON_MASK);
 
     ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 6, false);
     if (ret != 6) {
         printf("ERROR: neokey_init(3) %i\n", ret);
         return;
     }
+    printf("neokey_init: %i, %i, %i, %i\n", buf[2], buf[3], buf[4], buf[5]);
     // sleep_ms(10);
 
-    // buf[0] = GPIO_BASE;
-    // buf[1] = GPIO_PULLENSET;
-    // ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 6, false);
-    // if (ret != 6) {
-    //     printf("ERROR: neokey_init(4) %i\n", ret);
-    //     return;
-    // }
+    buf[0] = GPIO_BASE;
+    buf[1] = GPIO_PULLENSET;
+    buf[2] = 0;
+    buf[3] = 0;
+    buf[4] = 0;
+    buf[5] = (uint8_t)(BUTTON_MASK);
+    ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 6, false);
+    if (ret != 6) {
+        printf("ERROR: neokey_init(4) %i\n", ret);
+        return;
+    }
     // // sleep_ms(10);
 
-    // buf[0] = GPIO_BASE;
-    // buf[1] = GPIO_BULK_SET;
-    // ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 6, false);
-    // if (ret != 6) {
-    //     printf("ERROR: neokey_init(5) %i\n", ret);
-    //     return;
-    // }
+    buf[0] = GPIO_BASE;
+    buf[1] = GPIO_BULK_SET;
+    buf[2] = 0;
+    buf[3] = 0;
+    buf[4] = 0;
+    buf[5] = (uint8_t)(BUTTON_MASK);
+    ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 6, false);
+    if (ret != 6) {
+        printf("ERROR: neokey_init(5) %i\n", ret);
+        return;
+    }
     // // sleep_ms(10);
 
-    // buf[0] = GPIO_BASE;
-    // buf[1] = GPIO_INTENSET;
-    // ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 6, false);
-    // if (ret != 6) {
-    //     printf("ERROR: neokey_init(6) %i\n", ret);
-    //     return;
-    // }
+    buf[0] = GPIO_BASE;
+    buf[1] = GPIO_INTENSET;
+    buf[2] = 0;
+    buf[3] = 0;
+    buf[4] = 0;
+    buf[5] = (uint8_t)(BUTTON_MASK);
+    ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 6, false);
+    if (ret != 6) {
+        printf("ERROR: neokey_init(6) %i\n", ret);
+        return;
+    }
     // // sleep_ms(10);
 
     initialised = true;
@@ -102,45 +117,46 @@ void write_leds() {
             initialised = false;
             return;
         }
-    }
-}
 
-void show_leds() {
-    if (initialised) {
         buf[0] = NEOPIXEL_BASE;
         buf[1] = NEOPIXEL_SHOW;
 
-        int ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 2, false);
+        ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 2, false);
         if (ret != 2) {
-            printf("ERROR: show_leds %i\n", ret);
+            printf("ERROR: write_leds (show) %i\n", ret);
             initialised = false;
             return;
         }
     }
 }
 
-uint8_t read_keys_raw() {
+void read_keys_raw() {
     if (initialised) {
         buf[0] = GPIO_BASE;
         buf[1] = GPIO_BULK;
-        int ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 2, false);
+        int ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 2, true);
         if (ret < 0) {
             printf("ERROR: read_keys_raw write: %i\n", ret);
             initialised = false;
-            return 0xfe;
+            buttons_state = 0xfe;
+            return;
         }
         ret = i2c_read_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 4, false);
-        if (ret < 0) {
+        if (ret != 4) {
             printf("ERROR: read_keys_raw read: %i\n", ret);
             initialised = false;
-            return 0xfd;
+            buttons_state = 0xfd;
+            return;
         }
-        return buf[2] & 0xf0;
+        buttons_state = buf[2] & 0xf0;
+        // buttons_state = buf[2];
+        for (int i = 0; i < 4; i++) { buttons[i] = buf[i]; }
+    } else {
+        buttons_state = 0xff;
     }
-    return 0xff;
 }
 
-void process_keys(uint8_t buttons_state, uint32_t now) {
+void process_keys(uint32_t now) {
     for (int i = 0; i < 4; i++) {
         neokey_key_t key = keys[i];
         uint8_t new_bt_state = buttons_state & key.bt_mask;

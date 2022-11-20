@@ -36,12 +36,15 @@ volatile int16_t last_angle = -1;
 
 extern void neokey_init();
 extern void write_leds();
+extern uint8_t buttons_state;
+extern uint8_t buttons[4];
 extern uint8_t leds[12];
+uint8_t last_buttons[4];
+uint8_t last_buttons_state;
 
 
 extern void start_second_core();
-extern void process_keys(uint8_t buttons_state, uint32_t now);
-extern uint8_t read_keys_raw();
+extern void process_keys(uint32_t now);
 extern int get_key_state(uint32_t key_num);
 
 extern neokey_key_t keys[4];
@@ -97,8 +100,17 @@ bool reserved_addr(uint8_t addr) {
 }
 
 void keys_task(uint32_t now) {
-    uint8_t buttons_state = read_keys_raw();
-    process_keys(buttons_state, now);
+    // uint8_t buttons_state = read_keys_raw();
+    if (last_buttons_state != buttons_state
+        || last_buttons[0] != buttons[0]
+        || last_buttons[1] != buttons[1]
+        || last_buttons[2] != buttons[2]
+        || last_buttons[3] != buttons[3]) {
+        printf("Button state %i; [%i, %i, %i, %i]\n", buttons_state, buttons[0], buttons[1], buttons[2], buttons[3]);
+        last_buttons_state = buttons_state;
+        for (int i = 0; i < 4; i++) { last_buttons[i] = buttons[i]; }
+    }
+    process_keys(now);
 
     for (int i = 0; i < 4; i++) {
         int key_state = get_key_state(i);
@@ -158,7 +170,7 @@ int main() {
           initialise_state = STATE_RUNNING;
         }
         if (initialise_state == STATE_RUNNING) {
-          // keys_task(now);
+          keys_task(now);
 
           if (now >= next_report) {
             next_report = now + 2000;

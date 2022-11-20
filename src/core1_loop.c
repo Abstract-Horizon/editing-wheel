@@ -16,7 +16,7 @@ extern void init_pid(float kp_in, float ki_in, float kd_in, float gain_in, float
 extern float process_pid(float error);
 
 extern void write_leds();
-extern void show_leds();
+extern void read_keys_raw();
 extern uint8_t leds[12];
 
 #define PIN_AIN2 2
@@ -29,7 +29,7 @@ static uint32_t stop = false;
 
 static uint32_t run_cycle_at = 0;
 static uint32_t write_leds_at = 0;
-static uint32_t show_leds_at = 0;
+static uint32_t read_keys_at = 0;
 
 static float desired_angle;
 static float angle_of_retch = 0.0;
@@ -154,7 +154,7 @@ void core1_entry() {
     printf("Started second core\n");
     run_cycle_at = board_millis() + 10;
     write_leds_at = board_millis() + 12;
-    show_leds_at = write_leds_at + 2;
+    read_keys_at = board_millis() + 100;
     while (true) {
         uint32_t now = board_millis();
         if (now >= run_cycle_at) {
@@ -166,9 +166,9 @@ void core1_entry() {
             write_leds_at = now + 100;
             leds[0] += 16;
         }
-        if (now >= show_leds_at) {
-            show_leds_at = write_leds_at + 2;
-            show_leds();
+        if (now >= read_keys_at) {
+            read_keys_raw();
+            read_keys_at = now + 200;
         }
     }
 }
