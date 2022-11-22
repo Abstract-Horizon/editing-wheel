@@ -38,7 +38,6 @@ extern void neokey_init();
 extern void write_leds();
 extern uint8_t buttons_state;
 extern uint8_t buttons[4];
-extern uint8_t leds[12];
 uint8_t last_buttons[4];
 uint8_t last_buttons_state;
 
@@ -74,6 +73,7 @@ static uint32_t last_button = 0;
 static uint32_t btn = false;
 static uint16_t initialise_state = STATE_BOOTING;
 
+// static uint32_t debug_counter = 0;
 
 void led_blinking_task();
 void hid_task();
@@ -100,7 +100,6 @@ bool reserved_addr(uint8_t addr) {
 }
 
 void keys_task(uint32_t now) {
-    // uint8_t buttons_state = read_keys_raw();
     if (last_buttons_state != buttons_state
         || last_buttons[0] != buttons[0]
         || last_buttons[1] != buttons[1]
