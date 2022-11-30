@@ -16,6 +16,7 @@ extern void init_pid(float kp_in, float ki_in, float kd_in, float gain_in, float
 extern float process_pid(float error);
 
 extern void write_leds();
+extern void show_leds();
 extern void read_keys_raw();
 extern uint8_t leds[12];
 
@@ -31,6 +32,7 @@ const uint8_t AS5600_ADDRESS = 0x36;
 static uint32_t stop = false;
 
 static uint32_t run_cycle_at = 0;
+static uint cycle_counter = 0;
 
 static float desired_angle;
 static float angle_of_retch = 0.0;
@@ -160,9 +162,34 @@ void core1_entry() {
         now = board_millis();
         current_millis = now;
         if (now >= run_cycle_at) {
-            read_keys_raw();
             run_cycle();
-            write_leds();
+
+            switch (cycle_counter) {
+                case (1): {
+                    read_keys_raw();
+                    cycle_counter += 1;
+                    break;
+                }
+                case (2): {
+                    write_leds();
+                    cycle_counter += 1;
+                    break;
+                }
+                case (4): {
+                    show_leds();
+                    cycle_counter += 1;
+                    break;
+                }
+                case (10): {
+                    cycle_counter = 0;
+                    break;
+                }
+                default:
+                {
+                    cycle_counter += 1;
+                    break;
+                }
+            }
 
             run_cycle_at = now + 10;
             if (overrun) {

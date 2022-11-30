@@ -61,7 +61,8 @@ class Neokey1x4:
         read_data = i2c_msg.read(self.i2c_address, number_of_bytes_to_read)
         i2c_bus.i2c_rdwr(i2c_msg.write(self.i2c_address, buf))
         i2c_bus.i2c_rdwr(read_data)
-        print(f"read: {buf}")
+        data = list(read_data)
+        print(f"read: {buf} -> {data}")
         return list(read_data)
 
     def write_byte(self, reg_base: int, reg: int, value: int) -> None:

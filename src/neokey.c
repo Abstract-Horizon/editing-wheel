@@ -6,6 +6,8 @@
 #include "neokey.h"
 
 #define DEBUG_INIT 1
+// #define DEBUG_READ_KEYS 1
+// #define DEBUG_WRITE_LEDS 1
 
 uint8_t buttons[4] = {0, 0, 0, 0};
 uint8_t buttons_state = 0;
@@ -102,7 +104,7 @@ void neokey_init() {
 
 void write_leds() {
     if (initialised) {
-        int ret = 0;
+        int ret;
 
         buf[0] = NEOPIXEL_BASE;
         buf[1] = NEOPIXEL_BUF;
@@ -111,15 +113,30 @@ void write_leds() {
 
         for (int i = 0; i < 12; i++) { buf[i + 4] = leds[i]; }
 
+        #ifdef DEBUG_WRITE_LEDS
+            printf("write_leds: [%i, %i, %i, %i, %i, %i, %i, %i, %i, %i, %i, %i, %i, %i, %i, %i]\n",
+                buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7],
+                buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15]
+            );
+        #endif
         ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 16, false);
         if (ret != 16) {
             printf("ERROR: write_leds %i\n", ret);
             initialised = false;
             return;
         }
+    }
+}
+
+void show_leds() {
+    if (initialised) {
+        int ret;
 
         buf[0] = NEOPIXEL_BASE;
         buf[1] = NEOPIXEL_SHOW;
+        #ifdef DEBUG_WRITE_LEDS
+            printf("write_leds: [%i, %i]\n", buf[0], buf[1]);
+        #endif
 
         ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 2, false);
         if (ret != 2) {
@@ -132,25 +149,35 @@ void write_leds() {
 
 void read_keys_raw() {
     if (initialised) {
+        int ret;
+
         buf[0] = GPIO_BASE;
         buf[1] = GPIO_BULK;
-        int ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 2, true);
+        ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 2, true);
         if (ret < 0) {
             printf("ERROR: read_keys_raw write: %i\n", ret);
             initialised = false;
             buttons_state = 0xfe;
             return;
         }
-        // printf("read_keys_raw: %i, %i \n", buf[0], buf[1]);
+        #ifdef DEBUG_READ_KEYS
+            printf("read_keys_raw: [%i, %i] -> ", buf[0], buf[1]);
+        #endif
 
         uint8_t rec[4];
         ret = i2c_read_blocking(i2c_default, NEOKEY_I2C_ADDRESS, rec, 4, false);
         if (ret != 4) {
+            #ifdef DEBUG_READ_KEYS
+                printf("\n");
+            #endif
             printf("ERROR: read_keys_raw read: %i\n", ret);
             initialised = false;
             buttons_state = 0xfd;
             return;
         }
+        #ifdef DEBUG_READ_KEYS
+            printf("[%i, %i, %i, %i]\n", rec[0], rec[1], rec[2], rec[3]);
+        #endif
         buttons_state = rec[3] & 0xf0;
         for (int i = 0; i < 4; i++) { buttons[i] = rec[i]; }
         buttons_read_count = buttons_read_count + 1;
