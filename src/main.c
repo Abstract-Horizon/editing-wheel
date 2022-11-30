@@ -38,8 +38,12 @@ extern void neokey_init();
 extern void write_leds();
 extern uint8_t buttons_state;
 extern uint8_t buttons[4];
+extern uint32_t buttons_read_count;
 uint8_t last_buttons[4];
-uint8_t last_buttons_state;
+uint8_t last_buttons_state = 0x55;
+
+extern uint32_t current_millis;
+extern uint32_t overrun_millis;
 
 
 extern void start_second_core();
@@ -138,11 +142,6 @@ int main() {
     board_init();
     tusb_init();
     stdio_init_all();
-   
-    // local_i2c_init();
-    // neokey_init();
-    // start_second_core();
-    // sleep_ms(10);
 
     initialise_state = STATE_INITIALISE;
 
@@ -154,32 +153,45 @@ int main() {
         led_blinking_task();
 
         if (initialise_state == STATE_INITIALISE && now > next_event) {
-          next_event = now + 100;
-          initialise_state = STATE_STOPPED;
-          initialise_state = STATE_START_SECOND_CORE;
-          local_i2c_init();
-          neokey_init();
+            printf("\033c\033[2J\033[;HInitialising...\n");
+            next_event = now + 100;
+            initialise_state = STATE_STOPPED;
+            initialise_state = STATE_START_SECOND_CORE;
+            local_i2c_init();
+            neokey_init();
         }
         if (initialise_state == STATE_START_SECOND_CORE && now > next_event) {
-          start_second_core();
-          next_event = now + 100;
-          initialise_state = STATE_PREPARE_TO_RUN;
+            start_second_core();
+            next_event = now + 100;
+            initialise_state = STATE_PREPARE_TO_RUN;
         }
         if (initialise_state == STATE_PREPARE_TO_RUN && now > next_event) {
-          initialise_state = STATE_RUNNING;
+            initialise_state = STATE_RUNNING;
+            next_event = now + 2000;
         }
         if (initialise_state == STATE_RUNNING) {
-          keys_task(now);
+            keys_task(now);
 
-          if (now >= next_report) {
-            next_report = now + 2000;
-            if (last_angle != angle) {
-              printf("Angle is %i\n", angle);
-              last_angle = angle;
+            if (now >= next_report) {
+                next_report = now + 2000;
+                if (last_angle != angle) {
+                    printf("Angle is %i\n", angle);
+                    last_angle = angle;
+                }
             }
-          }
 
-          hid_task();
+            hid_task();
+
+            if (now > next_event) {
+                next_event = now + 1000;
+                // printf("Current time %i  ", current_millis);
+                // printf("buttons_read_count=%i  ", buttons_read_count);
+                // printf("button_state=%i; [%i, %i, %i, %i]\n", buttons_state, buttons[0], buttons[1], buttons[2], buttons[3]);
+            }
+            if (overrun_millis != 0) {
+                printf("Overrun %i  ", overrun_millis);
+                overrun_millis = 0;
+            }
         }
     }
 }

@@ -19,6 +19,9 @@ extern void write_leds();
 extern void read_keys_raw();
 extern uint8_t leds[12];
 
+uint32_t current_millis;
+uint32_t overrun_millis;
+
 #define PIN_AIN2 2
 #define PIN_AIN1 3
 #define PIN_PWM 0
@@ -28,8 +31,6 @@ const uint8_t AS5600_ADDRESS = 0x36;
 static uint32_t stop = false;
 
 static uint32_t run_cycle_at = 0;
-static uint32_t write_leds_at = 0;
-static uint32_t read_keys_at = 0;
 
 static float desired_angle;
 static float angle_of_retch = 0.0;
@@ -152,23 +153,29 @@ void run_cycle() {
 
 void core1_entry() {
     printf("Started second core\n");
-    run_cycle_at = board_millis() + 10;
-    write_leds_at = board_millis() + 12;
-    read_keys_at = board_millis() + 100;
+    bool overrun = false;
+    uint32_t now = board_millis();
+    run_cycle_at = now + 10;
     while (true) {
-        uint32_t now = board_millis();
+        now = board_millis();
+        current_millis = now;
         if (now >= run_cycle_at) {
-          run_cycle();
-          run_cycle_at = now + 10;
-        }
-        if (now >= write_leds_at) {
-            write_leds();
-            write_leds_at = now + 100;
-            leds[0] += 16;
-        }
-        if (now >= read_keys_at) {
             read_keys_raw();
-            read_keys_at = now + 200;
+            run_cycle();
+            write_leds();
+
+            run_cycle_at = now + 10;
+            if (overrun) {
+                overrun_millis = now - run_cycle_at;
+            } else {
+                overrun_millis = 0;
+            }
+            overrun = true;
+
+            leds[0] += 16;
+
+        } else {
+            overrun = false;
         }
     }
 }
