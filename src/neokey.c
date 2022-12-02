@@ -28,6 +28,47 @@ neokey_key_t keys[4] = {
 void neokey_init() {
     int ret;
 
+    buf[0] = STATUS_BASE;
+    buf[1] = STATUS_HW_ID;
+    #ifdef DEBUG_INIT
+        printf("write: [%i, %i]\n", buf[0], buf[1]);
+    #endif
+    ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 2, false);
+    if (ret != 2) {
+        printf("ERROR: neokey_init(hd id) %i\n", ret);
+        return;
+    }
+    uint8_t rec[4];
+    ret = i2c_read_blocking(i2c_default, NEOKEY_I2C_ADDRESS, rec, 1, false);
+    if (ret != 1) {
+        printf("ERROR: neokey_init(hd id read) %i\n", ret);
+        return;
+    }
+    printf("Neokey chip_id %i", rec[0]);
+
+    buf[0] = STATUS_BASE;
+    buf[1] = STATUS_VERSION;
+    #ifdef DEBUG_INIT
+        printf("\nwrite: [%i, %i]\n", buf[0], buf[1]);
+    #endif
+    ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 2, false);
+    if (ret != 2) {
+        printf("\nERROR: neokey_init(ver) %i\n", ret);
+        return;
+    }
+    ret = i2c_read_blocking(i2c_default, NEOKEY_I2C_ADDRESS, rec, 4, false);
+    if (ret != 4) {
+        printf("\nERROR: neokey_init(ver read) %i\n", ret);
+        return;
+    }
+    #ifdef DEBUG_INIT
+        printf("Neokey ");
+    #else
+        printf(", ");
+    #endif
+    printf("version %i, (%i, %i)\n", rec[0] << 8 | rec[1], rec[2], rec[3]);
+
+
     buf[0] = NEOPIXEL_BASE;
     buf[1] = NEOPIXEL_PIN;
     buf[2] = 3;
@@ -36,7 +77,7 @@ void neokey_init() {
     #endif
     ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 3, false);
     if (ret != 3) {
-        printf("ERROR: neokey_init(1) %i\n", ret);
+        printf("ERROR: neokey_init(neopixel pin) %i\n", ret);
         return;
     }
 
@@ -45,11 +86,11 @@ void neokey_init() {
     buf[2] = 0;
     buf[3] = 12;
     #ifdef DEBUG_INIT
-        printf("wrneokey_init writeite: [%i, %i, %i, %i]\n", buf[0], buf[1], buf[2], buf[3]);
+        printf("write: [%i, %i, %i, %i]\n", buf[0], buf[1], buf[2], buf[3]);
     #endif
     ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 4, false);
     if (ret != 4) {
-        printf("ERROR: neokey_init(2) %i\n", ret);
+        printf("ERROR: neokey_init(neopixel buf len) %i\n", ret);
         return;
     }
 
@@ -64,7 +105,7 @@ void neokey_init() {
     #endif
     ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 6, false);
     if (ret != 6) {
-        printf("ERROR: neokey_init(3) %i\n", ret);
+        printf("ERROR: neokey_init(gpio dirclr) %i\n", ret);
         return;
     }
 
@@ -74,7 +115,7 @@ void neokey_init() {
         printf("neokey_init write: [%i, %i, %i, %i, %i, %i]\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5]);
     #endif
     if (ret != 6) {
-        printf("ERROR: neokey_init(4) %i\n", ret);
+        printf("ERROR: neokey_init(gpio pullenset) %i\n", ret);
         return;
     }
 
@@ -84,7 +125,7 @@ void neokey_init() {
         printf("neokey_init write: [%i, %i, %i, %i, %i, %i]\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5]);
     #endif
     if (ret != 6) {
-        printf("ERROR: neokey_init(5) %i\n", ret);
+        printf("ERROR: neokey_init(gpio bulkset) %i\n", ret);
         return;
     }
 
@@ -94,7 +135,7 @@ void neokey_init() {
         printf("neokey_init write: [%i, %i, %i, %i, %i, %i]\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5]);
     #endif
     if (ret != 6) {
-        printf("ERROR: neokey_init(6) %i\n", ret);
+        printf("ERROR: neokey_init(gpio intenset) %i\n", ret);
         return;
     }
 
@@ -153,7 +194,7 @@ void read_keys_raw() {
 
         buf[0] = GPIO_BASE;
         buf[1] = GPIO_BULK;
-        ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 2, true);
+        ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 2, false);
         if (ret < 0) {
             printf("ERROR: read_keys_raw write: %i\n", ret);
             initialised = false;
@@ -164,6 +205,7 @@ void read_keys_raw() {
             printf("read_keys_raw: [%i, %i] -> ", buf[0], buf[1]);
         #endif
 
+        sleep_ms(2);
         uint8_t rec[4];
         ret = i2c_read_blocking(i2c_default, NEOKEY_I2C_ADDRESS, rec, 4, false);
         if (ret != 4) {

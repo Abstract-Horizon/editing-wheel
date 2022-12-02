@@ -170,12 +170,8 @@ void core1_entry() {
                     cycle_counter += 1;
                     break;
                 }
-                case (2): {
+                case (5): {
                     write_leds();
-                    cycle_counter += 1;
-                    break;
-                }
-                case (4): {
                     show_leds();
                     cycle_counter += 1;
                     break;
