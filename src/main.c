@@ -9,7 +9,9 @@
 #include "neokey.h"
 
 
-#define FLAG_VALUE 123
+#define DEBUG_ANGLE 0
+#define DEBUG_BUTTON_STATE 0
+#define DEBUG_KEYS 0
 
 /* Blink pattern
  * - 250 ms  : device not mounted
@@ -24,11 +26,12 @@ enum  {
 
 enum {
   STATE_BOOTING = 0,
-  STATE_INITIALISE = 1,
-  STATE_START_SECOND_CORE = 2,
-  STATE_PREPARE_TO_RUN = 3,
-  STATE_RUNNING = 4,
-  STATE_STOPPED = 5,
+  STATE_INITIALISE,
+  STATE_START_SECOND_CORE,
+  STATE_PREPARE_TO_RUN,
+  STATE_DELAY_RUNNING,
+  STATE_RUNNING,
+  STATE_STOPPED,
 };
 
 volatile int16_t angle = 0;
@@ -38,9 +41,10 @@ extern void neokey_init();
 extern void write_leds();
 extern uint8_t buttons_state;
 extern uint8_t buttons[4];
-extern uint32_t buttons_read_count;
+#if (DEBUG_BUTTON_STATE)
 uint8_t last_buttons[4];
 uint8_t last_buttons_state = 0x55;
+#endif
 
 extern uint32_t current_millis;
 extern uint32_t overrun_millis;
@@ -49,8 +53,8 @@ extern uint32_t overrun_millis;
 extern void start_second_core();
 extern void process_keys(uint32_t now);
 extern int get_key_state(uint32_t key_num);
+extern void set_profile(uint32_t selected_profile_number);
 
-extern neokey_key_t keys[4];
 extern uint8_t leds[12];
 
 const uint32_t direction = 1;
@@ -58,17 +62,17 @@ const float zero = 235.0;
 
 profile_t profiles[9] = {
     { .direction = direction, .zero = zero, .axis=0, .dividers = 1,  .expo = -0.9,  .gain_factor = 2,    .dead_band = 0.4},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 12, .expo = -0.25, .gain_factor = 1,    .dead_band = 0.4},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 8, .expo = -0.25, .gain_factor = 1,    .dead_band = 0.4},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 16, .expo = 0.9,   .gain_factor = 1,    .dead_band = 0.4},
+    { .direction = direction, .zero = zero, .axis=0, .dividers = 32, .expo = -0.8,  .gain_factor = 0.5, .dead_band = 0.8},
     { .direction = direction, .zero = zero, .axis=0, .dividers = 12, .expo = -0.9,  .gain_factor = 1,    .dead_band = 0.8},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 24, .expo = 0.9,   .gain_factor = 1,    .dead_band = 0.4},
     { .direction = direction, .zero = zero, .axis=0, .dividers = 24, .expo = -0.8,  .gain_factor = 1,    .dead_band = 0.4},
     { .direction = direction, .zero = zero, .axis=0, .dividers = 32, .expo = 0.9,   .gain_factor = 1,    .dead_band = 0.4},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 32, .expo = -0.8,  .gain_factor = 0.5, .dead_band = 0.8},
     { .direction = direction, .zero = zero, .axis=0, .dividers = 48, .expo = 0.9,   .gain_factor = 1,    .dead_band = 0.4},
     { .direction = direction, .zero = zero, .axis=0, .dividers = 48, .expo = -0.8,  .gain_factor = 0.5, .dead_band = 0.8},
 };
 
-uint32_t selected_profile = 6;
+uint32_t selected_profile = 2;
 
 static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
 static uint32_t next_report = 0;
@@ -103,34 +107,81 @@ bool reserved_addr(uint8_t addr) {
     return (addr & 0x78) == 0 || (addr & 0x78) == 0x78;
 }
 
-void keys_task(uint32_t now) {
-    if (last_buttons_state != buttons_state
-        || last_buttons[0] != buttons[0]
-        || last_buttons[1] != buttons[1]
-        || last_buttons[2] != buttons[2]
-        || last_buttons[3] != buttons[3]) {
-        printf("Button state %i; [%i, %i, %i, %i]\n", buttons_state, buttons[0], buttons[1], buttons[2], buttons[3]);
-        last_buttons_state = buttons_state;
-        for (int i = 0; i < 4; i++) { last_buttons[i] = buttons[i]; }
+void set_leds(int i, uint8_t r, uint8_t g, uint8_t b) {
+    i = 3 - i;
+    leds[i * 3] = g;
+    leds[i * 3 + 1] = r;
+    leds[i * 3 + 2] = b;
+}
+
+void set_leds_to_update_profile() {
+    for (int i = 0; i < 4; i++) {
+            if (i == selected_profile) {
+                set_leds(i, 0, 32, 32);
+            } else {
+                set_leds(i, 0, 0, 0);
+            }
     }
+}
+
+void keys_task(uint32_t now) {
+    #if (DEBUG_BUTTON_STATE)
+        if (last_buttons_state != buttons_state
+            || last_buttons[0] != buttons[0]
+            || last_buttons[1] != buttons[1]
+            || last_buttons[2] != buttons[2]
+            || last_buttons[3] != buttons[3]) {
+            printf("Button state %i; [%i, %i, %i, %i]\n", buttons_state, buttons[0], buttons[1], buttons[2], buttons[3]);
+            last_buttons_state = buttons_state;
+            for (int i = 0; i < 4; i++) { last_buttons[i] = buttons[i]; }
+        }
+    #endif
     process_keys(now);
 
     for (int i = 0; i < 4; i++) {
+        int key_no = 3 - i;
         int key_state = get_key_state(i);
         switch (key_state) {
+            case (KEY_DOWN): {
+                #if (DEBUG_KEYS)
+                printf("Key %d down.\n", key_no);
+                #endif
+                set_leds(key_no, 32, 32, 32);
+            }
+            break;
             case (KEY_PRESSED): {
-                printf("Key %d pressed.", i);
-
+                #if (DEBUG_KEYS)
+                printf("Key %d pressed.\n", key_no);
+                #endif
+                set_leds(key_no, 32, 32, 0);
             }
             break;
             case (KEY_LONG_PRESSED): {
-                printf("Key %d long pressed.", i);
-
+                #if (DEBUG_KEYS)
+                printf("Key %d long pressed.\n", key_no);
+                #endif
+                set_profile(key_no);
+                for (int j = 0; j < 4; j++) {
+                    if (j != key_no) {
+                        set_leds(j, 0, 0, 0);
+                    } else {
+                        set_leds(j, 0, 32, 0);
+                    }
+                }
+            }
+            break;
+            case (KEY_UP): {
+                #if (DEBUG_KEYS)
+                printf("Key %d up.\n", key_no);
+                #endif
+                set_leds_to_update_profile();
             }
             break;
             case (KEY_RELEASED): {
-                printf("Key %d released.", i);
-
+                #if (DEBUG_KEYS)
+                printf("Key %d released.\n", key_no);
+                #endif
+                set_leds_to_update_profile();
             }
             break;
             default: break;
@@ -159,6 +210,10 @@ int main() {
             initialise_state = STATE_START_SECOND_CORE;
             local_i2c_init();
             neokey_init();
+            set_leds(0, 0x20, 0, 0);
+            set_leds(1, 0x20, 0x20, 0);
+            set_leds(2, 0, 0x20, 0);
+            set_leds(3, 0, 0x20, 0x20);
         }
         if (initialise_state == STATE_START_SECOND_CORE && now > next_event) {
             start_second_core();
@@ -166,28 +221,28 @@ int main() {
             initialise_state = STATE_PREPARE_TO_RUN;
         }
         if (initialise_state == STATE_PREPARE_TO_RUN && now > next_event) {
-            initialise_state = STATE_RUNNING;
+            initialise_state = STATE_DELAY_RUNNING;
             next_event = now + 2000;
+        }
+        if (initialise_state == STATE_DELAY_RUNNING && now > next_event) {
+            set_leds_to_update_profile();
+            initialise_state = STATE_RUNNING;
         }
         if (initialise_state == STATE_RUNNING) {
             keys_task(now);
 
-            if (now >= next_report) {
-                next_report = now + 2000;
-                if (last_angle != angle) {
-                    printf("Angle is %i\n", angle);
-                    last_angle = angle;
+            #if (DEBUG_ANGLE)
+                if (now >= next_report) {
+                    next_report = now + 2000;
+                    if (last_angle != angle) {
+                        printf("Angle is %i\n", angle);
+                        last_angle = angle;
+                    }
                 }
-            }
+            #endif
 
             hid_task();
 
-            if (now > next_event) {
-                next_event = now + 1000;
-                // printf("Current time %i  ", current_millis);
-                // printf("buttons_read_count=%i  ", buttons_read_count);
-                // printf("button_state=%i; [%i, %i, %i, %i]\n", buttons_state, buttons[0], buttons[1], buttons[2], buttons[3]);
-            }
             if (overrun_millis != 0) {
                 printf("Overrun %i  ", overrun_millis);
                 overrun_millis = 0;

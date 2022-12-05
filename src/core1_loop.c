@@ -170,13 +170,13 @@ void core1_entry() {
                     cycle_counter += 1;
                     break;
                 }
-                case (5): {
+                case (2): {
                     write_leds();
                     show_leds();
                     cycle_counter += 1;
                     break;
                 }
-                case (10): {
+                case (3): {
                     cycle_counter = 0;
                     break;
                 }
@@ -194,8 +194,6 @@ void core1_entry() {
                 overrun_millis = 0;
             }
             overrun = true;
-
-            leds[0] += 16;
 
         } else {
             overrun = false;

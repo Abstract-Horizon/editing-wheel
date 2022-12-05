@@ -8,7 +8,7 @@
 #define BUTTON_B 5
 #define BUTTON_C 6
 #define BUTTON_D 7
-#define BUTTON_MASK (1 << 4) | (1 << 5) | (1 << 6) | (1 << 7)
+#define BUTTON_MASK (1 << BUTTON_A) | (1 << BUTTON_B) | (1 << BUTTON_C) | (1 << BUTTON_D)
 
 
 #define STATUS_BASE 0x00
@@ -40,13 +40,15 @@
 #define NEOPIXEL_BUF 0x04
 #define NEOPIXEL_SHOW 0x05
 
-#define KEY_DEBOUNCE_TIME 250
-#define KEY_LONG_PRESS_TIME 1500
+#define KEY_DEBOUNCE_TIME 150
+#define KEY_LONG_PRESS_TIME 750
 
 enum {
-    KEY_RELEASED = 0,
+    KEY_DOWN,
+    KEY_RELEASED,
+    KEY_UP,
     KEY_PRESSED,
-    KEY_LONG_PRESSED
+    KEY_LONG_PRESSED,
 };
 
 typedef struct TU_ATTR_PACKED
@@ -60,7 +62,7 @@ typedef struct TU_ATTR_PACKED
 } neokey_key_t;
 
 enum {
-  ST_RELEASED,
+  ST_RELEASED = 1,
   ST_PRESSED_DEBOUNCE,
   ST_PRESSED,
   ST_LONG_PRESS,

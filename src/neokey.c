@@ -5,32 +5,35 @@
 #include "hardware/i2c.h"
 #include "neokey.h"
 
-#define DEBUG_INIT 1
-// #define DEBUG_READ_KEYS 1
-// #define DEBUG_WRITE_LEDS 1
+#define DEBUG_INIT 0
+#define DEBUG_READ_KEYS 0
+#define DEBUG_WRITE_LEDS 0
+#define DEBUG_PROCESS_KEYS 0
 
 uint8_t buttons[4] = {0, 0, 0, 0};
-uint8_t buttons_state = 0;
-uint32_t buttons_read_count = 0;
-uint8_t leds[12] = {0x20, 0, 0, 0x20, 0x20, 0, 0, 0x20, 0, 0, 0x20, 0x20};
+volatile uint8_t buttons_state = 0;
+volatile uint8_t leds[12] = {0x20, 0, 0x20, 0x20, 0, 0, 0x20, 0x20, 0, 0, 0x20, 0};
+// volatile uint8_t leds[12] = {0, 0x20, 0, 0x20, 0x20, 0, 0x20, 0, 0, 0x20, 0, 0x20};
 
 static uint8_t buf[20];
 
 static uint32_t initialised = false;
 
-neokey_key_t keys[4] = {
+static neokey_key_t keys[4] = {
   {  .bt_mask = (1 << BUTTON_A), .bt_prev_state = (1 << BUTTON_A), .st_current_state = ST_RELEASED, .has_change = 0, .key_state = KEY_RELEASED },
   {  .bt_mask = (1 << BUTTON_B), .bt_prev_state = (1 << BUTTON_B), .st_current_state = ST_RELEASED, .has_change = 0, .key_state = KEY_RELEASED },
   {  .bt_mask = (1 << BUTTON_C), .bt_prev_state = (1 << BUTTON_C), .st_current_state = ST_RELEASED, .has_change = 0, .key_state = KEY_RELEASED },
   {  .bt_mask = (1 << BUTTON_D), .bt_prev_state = (1 << BUTTON_D), .st_current_state = ST_RELEASED, .has_change = 0, .key_state = KEY_RELEASED }
 };
 
+static neokey_key_t akey = { .time = 0, .bt_mask = (1 << BUTTON_A), .bt_prev_state = (1 << BUTTON_A), .st_current_state = ST_RELEASED, .has_change = 0, .key_state = KEY_RELEASED };
+
 void neokey_init() {
     int ret;
 
     buf[0] = STATUS_BASE;
     buf[1] = STATUS_HW_ID;
-    #ifdef DEBUG_INIT
+    #if (DEBUG_INIT)
         printf("write: [%i, %i]\n", buf[0], buf[1]);
     #endif
     ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 2, false);
@@ -48,7 +51,7 @@ void neokey_init() {
 
     buf[0] = STATUS_BASE;
     buf[1] = STATUS_VERSION;
-    #ifdef DEBUG_INIT
+    #if (DEBUG_INIT)
         printf("\nwrite: [%i, %i]\n", buf[0], buf[1]);
     #endif
     ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 2, false);
@@ -61,7 +64,7 @@ void neokey_init() {
         printf("\nERROR: neokey_init(ver read) %i\n", ret);
         return;
     }
-    #ifdef DEBUG_INIT
+    #if (DEBUG_INIT)
         printf("Neokey ");
     #else
         printf(", ");
@@ -72,7 +75,7 @@ void neokey_init() {
     buf[0] = NEOPIXEL_BASE;
     buf[1] = NEOPIXEL_PIN;
     buf[2] = 3;
-    #ifdef DEBUG_INIT
+    #if (DEBUG_INIT)
         printf("write: [%i, %i, %i]\n", buf[0], buf[1], buf[2]);
     #endif
     ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 3, false);
@@ -85,7 +88,7 @@ void neokey_init() {
     buf[1] = NEOPIXEL_BUF_LENGTH;
     buf[2] = 0;
     buf[3] = 12;
-    #ifdef DEBUG_INIT
+    #if (DEBUG_INIT)
         printf("write: [%i, %i, %i, %i]\n", buf[0], buf[1], buf[2], buf[3]);
     #endif
     ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 4, false);
@@ -100,7 +103,7 @@ void neokey_init() {
     buf[3] = 0;
     buf[4] = 0;
     buf[5] = (uint8_t)(BUTTON_MASK);
-    #ifdef DEBUG_INIT
+    #if (DEBUG_INIT)
         printf("neokey_init write: [%i, %i, %i, %i, %i, %i]\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5]);
     #endif
     ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 6, false);
@@ -111,7 +114,7 @@ void neokey_init() {
 
     buf[1] = GPIO_PULLENSET;
     ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 6, false);
-    #ifdef DEBUG_INIT
+    #if (DEBUG_INIT)
         printf("neokey_init write: [%i, %i, %i, %i, %i, %i]\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5]);
     #endif
     if (ret != 6) {
@@ -121,7 +124,7 @@ void neokey_init() {
 
     buf[1] = GPIO_BULK_SET;
     ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 6, false);
-    #ifdef DEBUG_INIT
+    #if (DEBUG_INIT)
         printf("neokey_init write: [%i, %i, %i, %i, %i, %i]\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5]);
     #endif
     if (ret != 6) {
@@ -131,7 +134,7 @@ void neokey_init() {
 
     buf[1] = GPIO_INTENSET;
     ret = i2c_write_blocking(i2c_default, NEOKEY_I2C_ADDRESS, buf, 6, false);
-    #ifdef DEBUG_INIT
+    #if (DEBUG_INIT)
         printf("neokey_init write: [%i, %i, %i, %i, %i, %i]\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5]);
     #endif
     if (ret != 6) {
@@ -154,7 +157,7 @@ void write_leds() {
 
         for (int i = 0; i < 12; i++) { buf[i + 4] = leds[i]; }
 
-        #ifdef DEBUG_WRITE_LEDS
+        #if (DEBUG_WRITE_LEDS)
             printf("write_leds: [%i, %i, %i, %i, %i, %i, %i, %i, %i, %i, %i, %i, %i, %i, %i, %i]\n",
                 buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7],
                 buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15]
@@ -175,7 +178,7 @@ void show_leds() {
 
         buf[0] = NEOPIXEL_BASE;
         buf[1] = NEOPIXEL_SHOW;
-        #ifdef DEBUG_WRITE_LEDS
+        #if (DEBUG_WRITE_LEDS)
             printf("write_leds: [%i, %i]\n", buf[0], buf[1]);
         #endif
 
@@ -201,7 +204,7 @@ void read_keys_raw() {
             buttons_state = 0xfe;
             return;
         }
-        #ifdef DEBUG_READ_KEYS
+        #if (DEBUG_READ_KEYS)
             printf("read_keys_raw: [%i, %i] -> ", buf[0], buf[1]);
         #endif
 
@@ -209,7 +212,7 @@ void read_keys_raw() {
         uint8_t rec[4];
         ret = i2c_read_blocking(i2c_default, NEOKEY_I2C_ADDRESS, rec, 4, false);
         if (ret != 4) {
-            #ifdef DEBUG_READ_KEYS
+        #if (DEBUG_READ_KEYS)
                 printf("\n");
             #endif
             printf("ERROR: read_keys_raw read: %i\n", ret);
@@ -217,81 +220,96 @@ void read_keys_raw() {
             buttons_state = 0xfd;
             return;
         }
-        #ifdef DEBUG_READ_KEYS
+        #if (DEBUG_READ_KEYS)
             printf("[%i, %i, %i, %i]\n", rec[0], rec[1], rec[2], rec[3]);
         #endif
         buttons_state = rec[3] & 0xf0;
         for (int i = 0; i < 4; i++) { buttons[i] = rec[i]; }
-        buttons_read_count = buttons_read_count + 1;
     } else {
         buttons_state = 0xff;
     }
 }
 
+void set_key_state(neokey_key_t* key, int key_state) {
+    if (key->key_state != key_state) {
+        key->key_state = key_state;
+        key->has_change = 1;
+    }
+}
+
 void process_keys(uint32_t now) {
     for (int i = 0; i < 4; i++) {
-        neokey_key_t key = keys[i];
-        uint8_t new_bt_state = buttons_state & key.bt_mask;
-        switch (key.st_current_state) {
+        neokey_key_t* key = &keys[i];
+        uint8_t new_bt_state = buttons_state & key->bt_mask;
+        #if (DEBUG_PROCESS_KEYS)
+            if (i == 0) {
+                if (key->bt_prev_state != new_bt_state) {
+                    printf("process_keys (key=%i): %i != %i, state=%i\n", i, key->bt_prev_state, new_bt_state, key->st_current_state);
+                }
+            }
+        #endif
+        switch (key->st_current_state) {
             case (ST_RELEASED): {
-                if (!new_bt_state) {
-                    key.time = now;
-                    key.st_current_state = ST_PRESSED_DEBOUNCE;
+                if (new_bt_state == 0) {
+                    key->time = now;
+                    key->st_current_state = ST_PRESSED_DEBOUNCE;
+                    set_key_state(key, KEY_DOWN);
                 }
             }
             break;
             case (ST_PRESSED_DEBOUNCE): {
-                if (new_bt_state) {
-                    key.st_current_state = ST_RELEASED;
+                if (new_bt_state != 0) {
+                    key->st_current_state = ST_RELEASED;
+                    set_key_state(key, KEY_UP);
                 } else {
-                    if (now - key.time > KEY_DEBOUNCE_TIME) {
-                        key.has_change = 1;
-                        key.key_state = KEY_PRESSED;
-                        key.st_current_state = ST_PRESSED;
+                    if (now - key->time > KEY_DEBOUNCE_TIME) {
+                        key->st_current_state = ST_PRESSED;
+                        set_key_state(key, KEY_PRESSED);
                     }
                 }
             }
             break;
             case (ST_PRESSED): {
-                if (new_bt_state) {
-                    key.time = now;
-                    key.st_current_state = ST_RELEASED_DEBOUNCE;
+                if (new_bt_state != 0) {
+                    key->time = now;
+                    key->st_current_state = ST_RELEASED_DEBOUNCE;
+                    set_key_state(key, KEY_UP);
                 } else {
-                    if (now - key.time > KEY_LONG_PRESS_TIME) {
-                        key.has_change = 1;
-                        key.key_state = KEY_LONG_PRESSED;
-                        key.st_current_state = ST_LONG_PRESS;
+                    if (now - key->time > KEY_LONG_PRESS_TIME) {
+                        set_key_state(key, KEY_LONG_PRESSED);
+                        key->st_current_state = ST_LONG_PRESS;
                     }
                 }
             }
             break;
             case (ST_LONG_PRESS): {
-                if (new_bt_state) {
-                    key.time = now;
-                    key.st_current_state = ST_RELEASED_DEBOUNCE_LONG_PRESS;
+                if (new_bt_state != 0) {
+                    key->time = now;
+                    key->st_current_state = ST_RELEASED_DEBOUNCE_LONG_PRESS;
+                    set_key_state(key, KEY_UP);
                 }
             }
             break;
             case (ST_RELEASED_DEBOUNCE_LONG_PRESS): {
-                if (!new_bt_state) {
-                    key.st_current_state = ST_LONG_PRESS;
+                if (new_bt_state == 0) {
+                    key->st_current_state = ST_LONG_PRESS;
+                    set_key_state(key, KEY_DOWN);
                 } else {
-                    if (now - key.time > KEY_DEBOUNCE_TIME) {
-                        key.has_change = 1;
-                        key.key_state = KEY_RELEASED;
-                        key.st_current_state = ST_RELEASED;
+                    if (now - key->time > KEY_DEBOUNCE_TIME) {
+                        key->st_current_state = ST_RELEASED;
+                        set_key_state(key, KEY_RELEASED);
                     }
                 }
             }
             break;
             case (ST_RELEASED_DEBOUNCE): {
-                if (!new_bt_state) {
-                    key.st_current_state = ST_PRESSED;
+                if (new_bt_state == 0) {
+                    key->st_current_state = ST_PRESSED;
+                    set_key_state(key, KEY_DOWN);
                 } else {
-                    if (now - key.time > KEY_DEBOUNCE_TIME) {
-                        key.has_change = 1;
-                        key.key_state = KEY_RELEASED;
-                        key.st_current_state = ST_RELEASED;
+                    if (now - key->time > KEY_DEBOUNCE_TIME) {
+                        key->st_current_state = ST_RELEASED;
+                        set_key_state(key, KEY_RELEASED);
                     }
                 }
             }
@@ -299,17 +317,18 @@ void process_keys(uint32_t now) {
             default: break;
         }
 
-        if (key.bt_prev_state != new_bt_state) {
-            key.bt_prev_state = new_bt_state;
+        if (key->bt_prev_state != new_bt_state) {
+            key->bt_prev_state = new_bt_state;
         }
     }
 }
 
 int get_key_state(uint32_t key_num) {
     if (key_num >= 0 && key_num <= 3) {
-        neokey_key_t key = keys[key_num];
-        if (key.has_change) {
-            return key.key_state;
+        neokey_key_t* key = &keys[key_num];
+        if (key->has_change) {
+            key->has_change = 0;
+            return key->key_state;
         }
     }
     return -1;
