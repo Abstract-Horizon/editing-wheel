@@ -28,6 +28,7 @@ target_link_libraries(${PROJECT}
     hardware_i2c
     hardware_pwm
     pico_multicore
+    pico_bootrom
 )
 
 pico_add_extra_outputs(${PROJECT})

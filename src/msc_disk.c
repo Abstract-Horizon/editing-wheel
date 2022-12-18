@@ -24,6 +24,7 @@
  */
 
 #include "bsp/board.h"
+#include "pico/bootrom.h"
 #include "tusb.h"
 #include "profile.h"
 #include "nxjson.h"
@@ -341,11 +342,15 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
       }
       break;
       case 14: {
-          uint32_t selection = buffer[0] - '1';
-          if (selection >= 0 && selection < 9) {
-              set_profile(selection);
-              printf("Selected profile %d", selection);
+          if (buffer[0] == 'R') {
+              reset_usb_boot(0, 0);
+          } else {
+                uint32_t selection = buffer[0] - '1';
+                if (selection >= 0 && selection < 9) {
+                    set_profile(selection);
+                    printf("Selected profile %d", selection);
 
+                }
           }
       }
       break;
