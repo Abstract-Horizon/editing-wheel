@@ -12,6 +12,7 @@
 #define DEBUG_ANGLE 0
 #define DEBUG_BUTTON_STATE 0
 #define DEBUG_KEYS 0
+#define DEBUG_MENU 1
 
 /* Blink pattern
  * - 250 ms  : device not mounted
@@ -81,7 +82,14 @@ static uint32_t last_button = 0;
 static uint32_t btn = false;
 static uint16_t initialise_state = STATE_BOOTING;
 
-// static uint32_t debug_counter = 0;
+enum {
+    KEYS_STATE_MENU_PROFILE_SELECT_BANK_0 = 0,
+    KEYS_STATE_MENU_PROFILE_SELECT_BANK_1,
+    KEYS_STATE_MENU_PROFILE_SELECT_BANK_2,
+    KEYS_STATE_WORKING,
+};
+
+static int keys_state = KEYS_STATE_WORKING;
 
 void led_blinking_task();
 void hid_task();
@@ -114,13 +122,66 @@ void set_leds(int i, uint8_t r, uint8_t g, uint8_t b) {
     leds[i * 3 + 2] = b;
 }
 
-void set_leds_to_update_profile() {
-    for (int i = 0; i < 4; i++) {
-            if (i == selected_profile) {
-                set_leds(i, 0, 32, 32);
-            } else {
-                set_leds(i, 0, 0, 0);
+void set_leds_to_selected_profile() {
+    if (keys_state < KEYS_STATE_WORKING) {
+        if (keys_state == KEYS_STATE_MENU_PROFILE_SELECT_BANK_0) {
+            set_leds(0, 32, 0, 0);
+            set_leds(1, 32, 32, 0);
+            set_leds(2, 0, 32, 0);
+        } else if (keys_state == KEYS_STATE_MENU_PROFILE_SELECT_BANK_1) {
+            set_leds(0, 0, 12, 32);
+            set_leds(1, 0, 0, 32);
+            set_leds(2, 32, 0, 32);
+        } else {
+            set_leds(0, 32, 16, 0);
+            set_leds(1, 0, 16, 16);
+            set_leds(2, 16, 16, 16);
+        }
+        set_leds(3, 32, 16, 0);
+    } else {
+        set_leds(0, 0, 0, 0);
+        set_leds(1, 0, 0, 0);
+        set_leds(2, 0, 0, 0);
+        set_leds(3, 32, 16, 0);
+        switch (selected_profile) {
+            case (0): {
+                set_leds(0, 32, 0, 0);
             }
+            break;
+            case (1): {
+                set_leds(1, 32, 32, 0);
+            }
+            break;
+            case (2): {
+                set_leds(2, 0, 32, 0);
+            }
+            break;
+            case (3): {
+                set_leds(0, 0, 32, 32);
+            }
+            break;
+            case (4): {
+                set_leds(1, 0, 12, 32);
+            }
+            break;
+            case (5): {
+                set_leds(2, 32, 0, 32);
+            }
+            break;
+            case (6): {
+                set_leds(0, 32, 16, 0);
+            }
+            break;
+            case (7): {
+                set_leds(1, 0, 16, 16);
+            }
+            break;
+            case (8): {
+                set_leds(2, 16, 16, 16);
+            }
+            break;
+            default: break;        
+        }
     }
 }
 
@@ -154,19 +215,36 @@ void keys_task(uint32_t now) {
                 printf("Key %d pressed.\n", key_no);
                 #endif
                 set_leds(key_no, 32, 32, 0);
+                if (keys_state < KEYS_STATE_WORKING) {
+                    if (key_no < 3) {
+                        set_profile(key_no + keys_state * 3);
+                        keys_state = KEYS_STATE_WORKING;
+                    } else {
+                        keys_state += 1;
+                    }
+                    if (keys_state == KEYS_STATE_WORKING) {
+                        #if (DEBUG_MENU)
+                        printf("Menu finished, bank %i\n", keys_state);
+                        #endif
+                    } else {
+                        #if (DEBUG_MENU)
+                        printf("Menu next, bank %i\n", keys_state);
+                        #endif
+                    }
+                    set_leds_to_selected_profile();
+                }
             }
             break;
             case (KEY_LONG_PRESSED): {
                 #if (DEBUG_KEYS)
                 printf("Key %d long pressed.\n", key_no);
                 #endif
-                set_profile(key_no);
-                for (int j = 0; j < 4; j++) {
-                    if (j != key_no) {
-                        set_leds(j, 0, 0, 0);
-                    } else {
-                        set_leds(j, 0, 32, 0);
-                    }
+                if (key_no == 3) {
+                    keys_state = KEYS_STATE_MENU_PROFILE_SELECT_BANK_0;
+                    #if (DEBUG_MENU)
+                    printf("Menu started, bank %i\n", keys_state);
+                    #endif
+                    set_leds_to_selected_profile();
                 }
             }
             break;
@@ -174,14 +252,14 @@ void keys_task(uint32_t now) {
                 #if (DEBUG_KEYS)
                 printf("Key %d up.\n", key_no);
                 #endif
-                set_leds_to_update_profile();
+                set_leds_to_selected_profile();
             }
             break;
             case (KEY_RELEASED): {
                 #if (DEBUG_KEYS)
                 printf("Key %d released.\n", key_no);
                 #endif
-                set_leds_to_update_profile();
+                set_leds_to_selected_profile();
             }
             break;
             default: break;
@@ -225,7 +303,7 @@ int main() {
             next_event = now + 2000;
         }
         if (initialise_state == STATE_DELAY_RUNNING && now > next_event) {
-            set_leds_to_update_profile();
+            set_leds_to_selected_profile();
             initialise_state = STATE_RUNNING;
         }
         if (initialise_state == STATE_RUNNING) {
