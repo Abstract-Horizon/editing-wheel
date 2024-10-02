@@ -123,12 +123,24 @@ const uint8_t readme_block_data[] = README_CONTENTS;
   \"direction\": % 1i,\n\
   \"zero\": %03i,\n\
   \"dividers\": %02i,\n\
-  \"axis\": %02i,\n\
   \"expo\": % 02.3f,\n\
   \"gain\": %02.3f,\n\
   \"dead_band\": %02.3f,\n\
+  \"fullres\": % 1i,\n\
+  \"wheel_main\": %08X,\n\
+  \"wheel_alt\": %08X,\n\
+  \"k1_main\": %08X,\n\
+  \"k1_alt\": %08X,\n\
+  \"k2_main\": %08X,\n\
+  \"k2_alt\": %08X,\n\
+  \"k3_main\": %08X,\n\
+  \"k3_alt\": %08X,\n\
 }\n"
 
+
+uint32_t key_to_uint32_t(key_action_t k) {
+    return k.type << 24 | k.sub_type << 16 | k.value;
+}
 
 ssize_t output_profile(uint8_t* buffer, int profile_no) {
     return sprintf(
@@ -136,10 +148,15 @@ ssize_t output_profile(uint8_t* buffer, int profile_no) {
         profiles[profile_no].direction,
         profiles[profile_no].zero,
         profiles[profile_no].dividers,
-        profiles[profile_no].axis,
         profiles[profile_no].expo,
         profiles[profile_no].gain_factor,
-        profiles[profile_no].dead_band
+        profiles[profile_no].dead_band,
+        profiles[profile_no].full_resolution,
+        key_to_uint32_t(profiles[profile_no].wheel_main),
+        key_to_uint32_t(profiles[profile_no].wheel_alt),
+        key_to_uint32_t(profiles[profile_no].key1),
+        key_to_uint32_t(profiles[profile_no].key2),
+        key_to_uint32_t(profiles[profile_no].key3)
     );
 }
 
@@ -315,7 +332,6 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
               profiles[received_profile_number].direction = nx_json_get(json, "direction")->num.s_value;
               profiles[received_profile_number].zero = nx_json_get(json, "zero")->num.s_value;
               profiles[received_profile_number].dividers = nx_json_get(json, "dividers")->num.s_value;
-              profiles[received_profile_number].axis = nx_json_get(json, "axis")->num.s_value;
               profiles[received_profile_number].expo = nx_json_get(json, "expo")->num.dbl_value;
               profiles[received_profile_number].gain_factor = nx_json_get(json, "gain")->num.dbl_value;
               profiles[received_profile_number].dead_band = nx_json_get(json, "dead_band")->num.dbl_value;
@@ -323,7 +339,6 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
               printf("direction=%d\n", profiles[received_profile_number].direction);
               printf("zero=%d\n",      profiles[received_profile_number].zero);
               printf("dividers=%d\n",  profiles[received_profile_number].dividers);
-              printf("axis=%d\n",      profiles[received_profile_number].axis);
               printf("expo=%f\n",      profiles[received_profile_number].expo);
               printf("gain=%f\n",      profiles[received_profile_number].gain_factor);
               printf("dead_band=%f\n", profiles[received_profile_number].dead_band);

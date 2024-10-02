@@ -20,20 +20,35 @@
  * - 2500 ms : device is suspended
  */
 enum  {
-  BLINK_NOT_MOUNTED = 250,
-  BLINK_MOUNTED = 1000,
-  BLINK_SUSPENDED = 2500,
+    BLINK_NOT_MOUNTED = 250,
+    BLINK_MOUNTED = 1000,
+    BLINK_SUSPENDED = 2500,
 };
 
 enum {
-  STATE_BOOTING = 0,
-  STATE_INITIALISE,
-  STATE_START_SECOND_CORE,
-  STATE_PREPARE_TO_RUN,
-  STATE_DELAY_RUNNING,
-  STATE_RUNNING,
-  STATE_STOPPED,
+    STATE_BOOTING = 0,
+    STATE_INITIALISE,
+    STATE_START_SECOND_CORE,
+    STATE_PREPARE_TO_RUN,
+    STATE_DELAY_RUNNING,
+    STATE_RUNNING,
+    STATE_STOPPED,
 };
+
+enum {
+    MOUSE_LEFT_BUTTON = 0,
+    MOUSE_RIGHT_BUTTON,
+    MOUSE_MIDDLE_BUTTON,
+    MOUSE_WHEEL_X,
+    MOUSE_WHEEL_Y,
+};
+
+enum {
+    JOYSTICK_AXIS_0 = 0,
+    JOYSTICK_AXIS_1,
+    JOYSTICK_AXIS_2,
+};
+
 
 volatile int16_t angle = 0;
 volatile int16_t last_angle = -1;
@@ -62,15 +77,38 @@ const uint32_t direction = 1;
 const float zero = 235.0;
 
 profile_t profiles[9] = {
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 1,  .expo = -0.9,  .gain_factor = 2,    .dead_band = 0.4},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 8, .expo = -0.25, .gain_factor = 1,    .dead_band = 0.4},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 16, .expo = 0.9,   .gain_factor = 1,    .dead_band = 0.4},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 32, .expo = -0.8,  .gain_factor = 0.5, .dead_band = 0.8},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 12, .expo = -0.9,  .gain_factor = 1,    .dead_band = 0.8},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 24, .expo = -0.8,  .gain_factor = 1,    .dead_band = 0.4},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 32, .expo = 0.9,   .gain_factor = 1,    .dead_band = 0.4},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 48, .expo = 0.9,   .gain_factor = 1,    .dead_band = 0.4},
-    { .direction = direction, .zero = zero, .axis=0, .dividers = 48, .expo = -0.8,  .gain_factor = 0.5, .dead_band = 0.8},
+    {
+        .direction = direction, .zero = zero, .dividers = 1, .expo = -0.9, .gain_factor = 2, .dead_band = 0.4, .full_resolution = 1,
+        .wheel_main = { .type = REPORT_ID_MOUSE, .sub_type = MOUSE_WHEEL_Y },
+        .wheel_alt = { .type = REPORT_ID_MOUSE, .sub_type = MOUSE_WHEEL_X },
+        .key1 = { .type = REPORT_ID_MOUSE, .sub_type = MOUSE_RIGHT_BUTTON },
+        .key2 = { .type = REPORT_ID_KEYBOARD, .value = HID_KEY_ESCAPE },
+        .key3 = { .type = REPORT_ID_JOYSTICK, .value = JOYSTICK_AXIS_0 },
+    },
+    {
+        .direction = direction, .zero = zero, .dividers = 8, .expo = -0.25, .gain_factor = 1, .dead_band = 0.4, .full_resolution = 0,
+    },
+    {
+        .direction = direction, .zero = zero, .dividers = 16, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4, .full_resolution = 0,
+    },
+    {
+        .direction = direction, .zero = zero, .dividers = 32, .expo = -0.8, .gain_factor = 0.5, .dead_band = 0.8, .full_resolution = 1,
+    },
+    {
+        .direction = direction, .zero = zero, .dividers = 12, .expo = -0.9, .gain_factor = 1, .dead_band = 0.8,
+    },
+    {
+        .direction = direction, .zero = zero, .dividers = 24, .expo = -0.8, .gain_factor = 1, .dead_band = 0.4,
+    },
+    {
+        .direction = direction, .zero = zero, .dividers = 32, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4,
+    },
+    {
+        .direction = direction, .zero = zero, .dividers = 48, .expo = 0.9, .gain_factor = 1, .dead_band = 0.4,
+    },
+    {
+        .direction = direction, .zero = zero, .dividers = 48, .expo = -0.8, .gain_factor = 0.5, .dead_band = 0.8,
+    },
 };
 
 uint32_t selected_profile = 2;
@@ -81,6 +119,10 @@ static uint32_t last_button = 0;
 
 static uint32_t btn = false;
 static uint16_t initialise_state = STATE_BOOTING;
+
+static uint8_t key_event[4] = {0, 0, 0};
+static bool alt_invoked = 0;
+
 
 enum {
     KEYS_STATE_MENU_PROFILE_SELECT_BANK_0 = 0,
@@ -110,6 +152,7 @@ void local_i2c_init() {
   #endif
 }
 
+void set_alt_invoked()
 
 bool reserved_addr(uint8_t addr) {
     return (addr & 0x78) == 0 || (addr & 0x78) == 0x78;
@@ -388,7 +431,7 @@ static void send_joystick_hid_report() {
     };
 
 
-    switch (profiles[selected_profile].axis) {
+    switch (profiles[selected_profile].wheel_main.value) {
         case 0: {
             report.x = angle;
         }
@@ -444,3 +487,5 @@ void led_blinking_task() {
   board_led_write(led_state);
   led_state = 1 - led_state;
 }
+
+void set_alt_invoked
